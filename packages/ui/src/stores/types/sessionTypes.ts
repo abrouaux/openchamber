@@ -46,6 +46,7 @@ export interface SessionContextUsage {
     userMessages?: number;
     assistantMessages?: number;
     tokensPerSecond?: number;
+    lastTokensPerSecond?: number;
 }
 
 // Default message limit (can be overridden via settings).
