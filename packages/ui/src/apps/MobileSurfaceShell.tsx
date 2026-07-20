@@ -39,6 +39,8 @@ export type MobileSurfaceShellProps = {
   onBack?: () => void;
   /** If true, disable swipe-down-to-dismiss (e.g. when a nested view should keep gesture for itself). */
   disableSwipeDismiss?: boolean;
+  /** If true, leave Escape available to nested content instead of dismissing the surface. */
+  disableEscapeDismiss?: boolean;
   /** If true, render only the drag handle and let the child render its own header. */
   headerless?: boolean;
   ariaLabel?: string;
@@ -53,6 +55,7 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
   trailing,
   onBack,
   disableSwipeDismiss = false,
+  disableEscapeDismiss = false,
   headerless = false,
   ariaLabel,
   children,
@@ -67,6 +70,15 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
   const isDraggingRef = React.useRef(false);
   const surfaceRef = React.useRef<HTMLElement | null>(null);
   const previousFocusRef = React.useRef<HTMLElement | null>(null);
+  // Keep onClose in a ref so the focus/keydown effect below depends only on `open`.
+  // The parent passes a fresh inline onClose on every render; if the effect depended
+  // on it, each parent re-render (e.g. an SSE store update) would re-run it and
+  // refocus the first element — stealing focus from whatever input the user is in
+  // and collapsing the keyboard mid-edit.
+  const onCloseRef = React.useRef(onClose);
+  React.useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   if (typeof document !== 'undefined' && !rootRef.current) {
     rootRef.current = ensureSurfaceRoot();
@@ -111,8 +123,8 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
     };
     const focusTimer = window.setTimeout(focusFirstElement, ENTER_DELAY_MS);
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
+      if (event.key === 'Escape' && !disableEscapeDismiss) {
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -145,7 +157,7 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
       previousFocusRef.current?.focus?.({ preventScroll: true });
       previousFocusRef.current = null;
     };
-  }, [onClose, open]);
+  }, [disableEscapeDismiss, open]);
 
   const handleDragStart = (event: React.TouchEvent<HTMLDivElement>) => {
     if (disableSwipeDismiss) return;
@@ -208,7 +220,7 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
   return createPortal(
     <div
       className={cn(
-        'fixed inset-0 z-50 flex flex-col bg-[rgb(0_0_0_/_0.45)]',
+        'oc-keyboard-inset-surface fixed inset-0 z-50 flex flex-col bg-[rgb(0_0_0_/_0.45)]',
         // The opacity transition keeps the scrim on its own compositing layer,
         // which iOS Safari clips to the viewport — without it, a static scrim
         // bleeds the dim into the bottom toolbar overscroll zone. Quick fade so
@@ -250,9 +262,13 @@ export const MobileSurfaceShell: React.FC<MobileSurfaceShellProps> = ({
           onTouchEnd={handleDragEnd}
           onTouchCancel={handleDragEnd}
         >
-          <div className="flex items-center justify-center pt-2 pb-1">
-            <span className="h-1 w-10 rounded-full bg-[var(--surface-muted)]" aria-hidden />
-          </div>
+          {disableSwipeDismiss ? (
+            <div className="h-3" />
+          ) : (
+            <div className="flex items-center justify-center pt-2 pb-1">
+              <span className="h-1 w-10 rounded-full bg-[var(--surface-muted)]" aria-hidden />
+            </div>
+          )}
           {!headerless ? (
             <header className="flex h-[var(--oc-header-height,56px)] items-center gap-2 px-3">
               {leading}

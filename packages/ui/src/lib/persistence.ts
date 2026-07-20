@@ -11,6 +11,8 @@ import { sanitizeStarterRefs } from '@/lib/draftStarters';
 import { normalizeMobileKeyboardMode, setStoredMobileKeyboardMode } from '@/lib/mobileKeyboardMode';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import type { ReasoningMode } from '@/lib/api/types';
+import { isTerminalShell } from '@/lib/terminalShell';
+import { getRuntimeKey, subscribeRuntimeEndpointChanged, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 
 const REASONING_MODE_VALUES = new Set<ReasoningMode>(['off', 'collapsible-hidden', 'collapsible-dynamic', 'full']);
 
@@ -142,7 +144,10 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
       localStorage.removeItem('opencode-update-toast-dismissed-version');
     }
   }
-  if (settings.sttProvider === 'browser' || settings.sttProvider === 'server') {
+  if (typeof settings.dictationEnabled === 'boolean') {
+    localStorage.setItem('dictationEnabled', String(settings.dictationEnabled));
+  }
+  if (settings.sttProvider === 'local' || settings.sttProvider === 'openai-compatible') {
     localStorage.setItem('sttProvider', settings.sttProvider);
   }
   if (typeof settings.sttServerUrl === 'string') {
@@ -151,17 +156,11 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
   if (typeof settings.sttModel === 'string') {
     localStorage.setItem('sttModel', settings.sttModel);
   }
+  if (typeof settings.sttLocalModel === 'string') {
+    localStorage.setItem('sttLocalModel', settings.sttLocalModel);
+  }
   if (typeof settings.sttLanguage === 'string') {
     localStorage.setItem('sttLanguage', settings.sttLanguage);
-  }
-  if (typeof settings.sttSilenceThresholdDb === 'number' && Number.isFinite(settings.sttSilenceThresholdDb)) {
-    localStorage.setItem('sttSilenceThresholdDb', String(settings.sttSilenceThresholdDb));
-  }
-  if (typeof settings.sttSilenceHoldMs === 'number' && Number.isFinite(settings.sttSilenceHoldMs)) {
-    localStorage.setItem('sttSilenceHoldMs', String(settings.sttSilenceHoldMs));
-  }
-  if (typeof settings.sttTranscribeOnStop === 'boolean') {
-    localStorage.setItem('sttTranscribeOnStop', String(settings.sttTranscribeOnStop));
   }
 };
 
@@ -170,6 +169,51 @@ const dispatchSettingsSynced = (settings: DesktopSettings): void => {
     return;
   }
   window.dispatchEvent(new CustomEvent<DesktopSettings>('openchamber:settings-synced', { detail: settings }));
+};
+
+type SettingsSaveState = 'idle' | 'saving' | 'error';
+
+let _settingsSaveState: SettingsSaveState = 'idle';
+let _settingsSaveStateResetTimer: ReturnType<typeof setTimeout> | null = null;
+const _settingsSaveStateListeners = new Set<() => void>();
+
+export const getSettingsSaveState = (): SettingsSaveState => _settingsSaveState;
+
+export const subscribeToSettingsSaveState = (listener: () => void): (() => void) => {
+  _settingsSaveStateListeners.add(listener);
+  return () => _settingsSaveStateListeners.delete(listener);
+};
+
+/**
+ * Drive the shared settings save indicator from pages that persist through
+ * their own APIs instead of updateDesktopSettings. 'error' resets to idle.
+ */
+export const reportSettingsSaveState = (state: 'saving' | 'saved' | 'error'): void => {
+  dispatchSettingsSaveState(state);
+};
+
+const dispatchSettingsSaveState = (state: 'saving' | 'saved' | 'error'): void => {
+  if (_settingsSaveStateResetTimer) {
+    clearTimeout(_settingsSaveStateResetTimer);
+    _settingsSaveStateResetTimer = null;
+  }
+
+  // Quiet indicator: success is the normal case and renders nothing ('saved' → idle);
+  // only in-flight saves and failures surface in the UI.
+  const nextState: SettingsSaveState = state === 'saved' ? 'idle' : state;
+  if (nextState !== _settingsSaveState) {
+    _settingsSaveState = nextState;
+    _settingsSaveStateListeners.forEach((listener) => listener());
+  }
+
+  if (nextState === 'error') {
+    _settingsSaveStateResetTimer = setTimeout(() => dispatchSettingsSaveState('saved'), 6000);
+  }
+
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.dispatchEvent(new CustomEvent<'saving' | 'saved' | 'error'>('openchamber:settings-save-state', { detail: state }));
 };
 
 type PersistApi = {
@@ -456,6 +500,21 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   if (resolvedReasoningMode && resolvedReasoningMode !== store.reasoningMode) {
     store.setReasoningMode(resolvedReasoningMode);
   }
+  if (typeof settings.sessionRecapEnabled === 'boolean' && settings.sessionRecapEnabled !== store.sessionRecapEnabled) {
+    store.setSessionRecapEnabled(settings.sessionRecapEnabled);
+  }
+  if (typeof settings.sessionSuggestionEnabled === 'boolean' && settings.sessionSuggestionEnabled !== store.sessionSuggestionEnabled) {
+    store.setSessionSuggestionEnabled(settings.sessionSuggestionEnabled);
+  }
+  if (typeof settings.sessionGoalEnabled === 'boolean' && settings.sessionGoalEnabled !== store.sessionGoalEnabled) {
+    store.setSessionGoalEnabled(settings.sessionGoalEnabled);
+  }
+  if (typeof settings.sessionGoalDefaultBudgetEnabled === 'boolean' && settings.sessionGoalDefaultBudgetEnabled !== store.sessionGoalDefaultBudgetEnabled) {
+    store.setSessionGoalDefaultBudgetEnabled(settings.sessionGoalDefaultBudgetEnabled);
+  }
+  if (typeof settings.sessionGoalDefaultBudget === 'number' && Number.isFinite(settings.sessionGoalDefaultBudget) && settings.sessionGoalDefaultBudget !== store.sessionGoalDefaultBudget) {
+    store.setSessionGoalDefaultBudget(settings.sessionGoalDefaultBudget);
+  }
   if (typeof settings.autoDeleteEnabled === 'boolean' && settings.autoDeleteEnabled !== store.autoDeleteEnabled) {
     store.setAutoDeleteEnabled(settings.autoDeleteEnabled);
   }
@@ -531,6 +590,9 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   if (typeof settings.showToolFileIcons === 'boolean' && settings.showToolFileIcons !== store.showToolFileIcons) {
     store.setShowToolFileIcons(settings.showToolFileIcons);
   }
+  if (typeof settings.codeBlockLineWrap === 'boolean' && settings.codeBlockLineWrap !== store.codeBlockLineWrap) {
+    store.setCodeBlockLineWrap(settings.codeBlockLineWrap);
+  }
   if (typeof settings.showTurnChangedFiles === 'boolean' && settings.showTurnChangedFiles !== store.showTurnChangedFiles) {
     store.setShowTurnChangedFiles(settings.showTurnChangedFiles);
   }
@@ -550,6 +612,12 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
     && (settings.weekStartPreference === 'auto' || settings.weekStartPreference === 'sunday' || settings.weekStartPreference === 'monday')) {
     if (settings.weekStartPreference !== store.weekStartPreference) {
       store.setWeekStartPreference(settings.weekStartPreference);
+    }
+  }
+  if (typeof settings.desktopWindowControlsPosition === 'string'
+    && (settings.desktopWindowControlsPosition === 'auto' || settings.desktopWindowControlsPosition === 'left' || settings.desktopWindowControlsPosition === 'right')) {
+    if (settings.desktopWindowControlsPosition !== store.desktopWindowControlsPosition) {
+      store.setDesktopWindowControlsPosition(settings.desktopWindowControlsPosition);
     }
   }
   if (typeof settings.chatRenderMode === 'string'
@@ -588,6 +656,9 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   if (typeof settings.stickyUserHeader === 'boolean' && settings.stickyUserHeader !== store.stickyUserHeader) {
     store.setStickyUserHeader(settings.stickyUserHeader);
   }
+  if (typeof settings.promptNavigatorEnabled === 'boolean' && settings.promptNavigatorEnabled !== store.promptNavigatorEnabled) {
+    store.setPromptNavigatorEnabled(settings.promptNavigatorEnabled);
+  }
   if (typeof settings.expandedEditorToolbar === 'boolean' && settings.expandedEditorToolbar !== store.expandedEditorToolbar) {
     store.setExpandedEditorToolbar(settings.expandedEditorToolbar);
   }
@@ -607,13 +678,45 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
     store.setFontSize(settings.fontSize);
   }
   if (Array.isArray(settings.draftStarters)) {
-    const nextStarters = sanitizeStarterRefs(settings.draftStarters);
+    let nextStarters = sanitizeStarterRefs(settings.draftStarters);
+    if (settings.draftStartersCraftGoalAdded !== true && !nextStarters.some((starter) => starter.type === 'command' && starter.name === 'craft-goal')) {
+      const planIndex = nextStarters.findIndex((starter) => starter.type === 'command' && starter.name === 'plan-feature');
+      const insertAt = planIndex >= 0 ? planIndex + 1 : nextStarters.length;
+      nextStarters = [
+        ...nextStarters.slice(0, insertAt),
+        { type: 'command', name: 'craft-goal' },
+        ...nextStarters.slice(insertAt),
+      ];
+    }
     if (JSON.stringify(store.globalDraftStarters) !== JSON.stringify(nextStarters)) {
       store.setGlobalDraftStarters(nextStarters);
     }
+    if (settings.draftStartersCraftGoalAdded !== true) {
+      settings.draftStarters = nextStarters;
+      settings.draftStartersCraftGoalAdded = true;
+    }
+  } else if (settings.draftStartersCraftGoalAdded !== true) {
+    // The built-in default already contains Craft a Goal; only persist the marker
+    // so removing it later remains a durable user choice.
+    settings.draftStartersCraftGoalAdded = true;
   }
   if (typeof settings.terminalFontSize === 'number' && Number.isFinite(settings.terminalFontSize) && settings.terminalFontSize !== store.terminalFontSize) {
     store.setTerminalFontSize(settings.terminalFontSize);
+  }
+  if (isTerminalShell(settings.terminalShell) && settings.terminalShell !== store.terminalShell) {
+    store.setTerminalShell(settings.terminalShell);
+  }
+  if (
+    Array.isArray(settings.terminalLoginShells)
+    && (
+      settings.terminalLoginShells.length !== store.terminalLoginShells.length
+      || settings.terminalLoginShells.some((shell, index) => shell !== store.terminalLoginShells[index])
+    )
+  ) {
+    store.setTerminalLoginShells(settings.terminalLoginShells);
+  }
+  if (typeof settings.editorFontSize === 'number' && Number.isFinite(settings.editorFontSize) && settings.editorFontSize !== store.editorFontSize) {
+    store.setEditorFontSize(settings.editorFontSize);
   }
   if (isUiFontOption(settings.uiFont) && settings.uiFont !== store.uiFont) {
     store.setUiFont(settings.uiFont);
@@ -641,7 +744,10 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   }
   if (configStoreApi && configStore) {
     const nextConfigState: Partial<typeof configStore> = {};
-    if ((settings.sttProvider === 'browser' || settings.sttProvider === 'server') && settings.sttProvider !== configStore.sttProvider) {
+    if (typeof settings.dictationEnabled === 'boolean' && settings.dictationEnabled !== configStore.dictationEnabled) {
+      nextConfigState.dictationEnabled = settings.dictationEnabled;
+    }
+    if ((settings.sttProvider === 'local' || settings.sttProvider === 'openai-compatible') && settings.sttProvider !== configStore.sttProvider) {
       nextConfigState.sttProvider = settings.sttProvider;
     }
     if (typeof settings.sttServerUrl === 'string' && settings.sttServerUrl !== configStore.sttServerUrl) {
@@ -650,17 +756,11 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
     if (typeof settings.sttModel === 'string' && settings.sttModel !== configStore.sttModel) {
       nextConfigState.sttModel = settings.sttModel;
     }
+    if (typeof settings.sttLocalModel === 'string' && settings.sttLocalModel !== configStore.sttLocalModel) {
+      nextConfigState.sttLocalModel = settings.sttLocalModel;
+    }
     if (typeof settings.sttLanguage === 'string' && settings.sttLanguage !== configStore.sttLanguage) {
       nextConfigState.sttLanguage = settings.sttLanguage;
-    }
-    if (typeof settings.sttSilenceThresholdDb === 'number' && Number.isFinite(settings.sttSilenceThresholdDb) && settings.sttSilenceThresholdDb !== configStore.sttSilenceThresholdDb) {
-      nextConfigState.sttSilenceThresholdDb = settings.sttSilenceThresholdDb;
-    }
-    if (typeof settings.sttSilenceHoldMs === 'number' && Number.isFinite(settings.sttSilenceHoldMs) && settings.sttSilenceHoldMs !== configStore.sttSilenceHoldMs) {
-      nextConfigState.sttSilenceHoldMs = settings.sttSilenceHoldMs;
-    }
-    if (typeof settings.sttTranscribeOnStop === 'boolean' && settings.sttTranscribeOnStop !== configStore.sttTranscribeOnStop) {
-      nextConfigState.sttTranscribeOnStop = settings.sttTranscribeOnStop;
     }
     if (Object.keys(nextConfigState).length > 0) {
       configStoreApi.setState(nextConfigState);
@@ -771,6 +871,12 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.desktopLanAccessEnabled === 'boolean') {
     result.desktopLanAccessEnabled = candidate.desktopLanAccessEnabled;
   }
+  if (typeof candidate.desktopKeepAwakeEnabled === 'boolean') {
+    result.desktopKeepAwakeEnabled = candidate.desktopKeepAwakeEnabled;
+  }
+  if (typeof candidate.desktopMinimizeToTrayEnabled === 'boolean') {
+    result.desktopMinimizeToTrayEnabled = candidate.desktopMinimizeToTrayEnabled;
+  }
 
   const projects = sanitizeProjects(candidate.projects);
   if (projects) {
@@ -795,9 +901,27 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (Array.isArray(candidate.draftStarters)) {
     result.draftStarters = sanitizeStarterRefs(candidate.draftStarters);
   }
+  if (typeof candidate.draftStartersCraftGoalAdded === 'boolean') {
+    result.draftStartersCraftGoalAdded = candidate.draftStartersCraftGoalAdded;
+  }
   const resolvedReasoning = resolveReasoningModeFromSettings(candidate as Partial<DesktopSettings>);
   if (resolvedReasoning) {
     result.reasoningMode = resolvedReasoning;
+  }
+  if (typeof candidate.sessionRecapEnabled === 'boolean') {
+    result.sessionRecapEnabled = candidate.sessionRecapEnabled;
+  }
+  if (typeof candidate.sessionSuggestionEnabled === 'boolean') {
+    result.sessionSuggestionEnabled = candidate.sessionSuggestionEnabled;
+  }
+  if (typeof candidate.sessionGoalEnabled === 'boolean') {
+    result.sessionGoalEnabled = candidate.sessionGoalEnabled;
+  }
+  if (typeof candidate.sessionGoalDefaultBudgetEnabled === 'boolean') {
+    result.sessionGoalDefaultBudgetEnabled = candidate.sessionGoalDefaultBudgetEnabled;
+  }
+  if (typeof candidate.sessionGoalDefaultBudget === 'number' && Number.isFinite(candidate.sessionGoalDefaultBudget) && candidate.sessionGoalDefaultBudget > 0) {
+    result.sessionGoalDefaultBudget = Math.floor(candidate.sessionGoalDefaultBudget);
   }
   if (typeof candidate.autoDeleteEnabled === 'boolean') {
     result.autoDeleteEnabled = candidate.autoDeleteEnabled;
@@ -862,6 +986,12 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.defaultAgent === 'string' && candidate.defaultAgent.length > 0) {
     result.defaultAgent = candidate.defaultAgent;
+  }
+  if (typeof candidate.smallModelUseDefault === 'boolean') {
+    result.smallModelUseDefault = candidate.smallModelUseDefault;
+  }
+  if (typeof candidate.smallModelOverride === 'string' && candidate.smallModelOverride.length > 0) {
+    result.smallModelOverride = candidate.smallModelOverride;
   }
   if (typeof candidate.autoCreateWorktree === 'boolean') {
     result.autoCreateWorktree = candidate.autoCreateWorktree;
@@ -1057,6 +1187,9 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.showToolFileIcons === 'boolean') {
     result.showToolFileIcons = candidate.showToolFileIcons;
   }
+  if (typeof candidate.codeBlockLineWrap === 'boolean') {
+    result.codeBlockLineWrap = candidate.codeBlockLineWrap;
+  }
   if (typeof candidate.showTurnChangedFiles === 'boolean') {
     result.showTurnChangedFiles = candidate.showTurnChangedFiles;
   }
@@ -1073,6 +1206,10 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.weekStartPreference === 'string'
     && (candidate.weekStartPreference === 'auto' || candidate.weekStartPreference === 'sunday' || candidate.weekStartPreference === 'monday')) {
     result.weekStartPreference = candidate.weekStartPreference;
+  }
+  if (typeof candidate.desktopWindowControlsPosition === 'string'
+    && (candidate.desktopWindowControlsPosition === 'auto' || candidate.desktopWindowControlsPosition === 'left' || candidate.desktopWindowControlsPosition === 'right')) {
+    result.desktopWindowControlsPosition = candidate.desktopWindowControlsPosition;
   }
   if (typeof candidate.chatRenderMode === 'string'
     && (candidate.chatRenderMode === 'sorted' || candidate.chatRenderMode === 'live')) {
@@ -1100,6 +1237,9 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.stickyUserHeader === 'boolean') {
     result.stickyUserHeader = candidate.stickyUserHeader;
   }
+  if (typeof candidate.promptNavigatorEnabled === 'boolean') {
+    result.promptNavigatorEnabled = candidate.promptNavigatorEnabled;
+  }
   if (typeof candidate.wideChatLayoutEnabled === 'boolean') {
     result.wideChatLayoutEnabled = candidate.wideChatLayoutEnabled;
   }
@@ -1111,6 +1251,15 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.terminalFontSize === 'number' && Number.isFinite(candidate.terminalFontSize)) {
     result.terminalFontSize = candidate.terminalFontSize;
+  }
+  if (isTerminalShell(candidate.terminalShell)) {
+    result.terminalShell = candidate.terminalShell;
+  }
+  if (Array.isArray(candidate.terminalLoginShells)) {
+    result.terminalLoginShells = [...new Set(candidate.terminalLoginShells.filter(isTerminalShell))];
+  }
+  if (typeof candidate.editorFontSize === 'number' && Number.isFinite(candidate.editorFontSize)) {
+    result.editorFontSize = candidate.editorFontSize;
   }
   if (isUiFontOption(candidate.uiFont)) {
     result.uiFont = candidate.uiFont;
@@ -1225,8 +1374,16 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.responseStyleCustomInstructions === 'string') {
     result.responseStyleCustomInstructions = candidate.responseStyleCustomInstructions;
   }
-  if (candidate.sttProvider === 'browser' || candidate.sttProvider === 'server') {
+  if (typeof candidate.dictationEnabled === 'boolean') {
+    result.dictationEnabled = candidate.dictationEnabled;
+  }
+  if (candidate.sttProvider === 'local' || candidate.sttProvider === 'openai-compatible') {
     result.sttProvider = candidate.sttProvider;
+  } else if (candidate.sttProvider === 'server') {
+    // Legacy provider migration: 'server' was the OpenAI-compatible endpoint.
+    result.sttProvider = 'openai-compatible';
+  } else if (candidate.sttProvider === 'browser' || candidate.sttProvider === 'wasm') {
+    result.sttProvider = 'local';
   }
   if (typeof candidate.sttServerUrl === 'string') {
     result.sttServerUrl = candidate.sttServerUrl.trim();
@@ -1234,68 +1391,115 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.sttModel === 'string') {
     result.sttModel = candidate.sttModel.trim();
   }
+  if (typeof candidate.sttLocalModel === 'string') {
+    result.sttLocalModel = candidate.sttLocalModel.trim();
+  }
   if (typeof candidate.sttLanguage === 'string') {
     result.sttLanguage = candidate.sttLanguage.trim();
-  }
-  if (typeof candidate.sttSilenceThresholdDb === 'number' && Number.isFinite(candidate.sttSilenceThresholdDb)) {
-    result.sttSilenceThresholdDb = candidate.sttSilenceThresholdDb;
-  }
-  if (typeof candidate.sttSilenceHoldMs === 'number' && Number.isFinite(candidate.sttSilenceHoldMs)) {
-    result.sttSilenceHoldMs = candidate.sttSilenceHoldMs;
-  }
-  if (typeof candidate.sttTranscribeOnStop === 'boolean') {
-    result.sttTranscribeOnStop = candidate.sttTranscribeOnStop;
   }
 
   return result;
 };
 
-// Short-lived cache + in-flight dedup for settings fetches to avoid repeated GET calls during startup
-let _settingsCache: { value: DesktopSettings | null; at: number } | null = null;
-let _settingsInflight: Promise<DesktopSettings | null> | null = null;
-const SETTINGS_CACHE_TTL = 2_000; // 2 seconds — covers the startup burst
+type SettingsRuntimeContext = { runtimeKey: string; generation: number };
 
-const fetchWebSettings = async (): Promise<DesktopSettings | null> => {
+// Short-lived cache + in-flight dedup for settings fetches to avoid repeated GET calls during startup
+let _settingsRuntimeGeneration = 0;
+let _settingsCache: { value: DesktopSettings | null; at: number; context: SettingsRuntimeContext } | null = null;
+let _settingsInflight: { promise: Promise<DesktopSettings | null>; context: SettingsRuntimeContext } | null = null;
+let _pendingSettingsChanges: Partial<DesktopSettings> | null = null;
+let _pendingSettingsContext: SettingsRuntimeContext | null = null;
+let _settingsFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let _settingsFlushWaiters: Array<() => void> = [];
+let _settingsLifecycleInitialized = false;
+const SETTINGS_CACHE_TTL = 2_000; // 2 seconds — covers the startup burst
+const SETTINGS_DEBOUNCE_MS = 200;
+
+const captureSettingsRuntimeContext = (): SettingsRuntimeContext => ({
+  runtimeKey: getRuntimeKey(),
+  generation: _settingsRuntimeGeneration,
+});
+
+const isSameSettingsRuntimeContext = (left: SettingsRuntimeContext, right: SettingsRuntimeContext): boolean => (
+  left.runtimeKey === right.runtimeKey && left.generation === right.generation
+);
+
+const isSettingsRuntimeContextCurrent = (context: SettingsRuntimeContext): boolean => (
+  context.generation === _settingsRuntimeGeneration && context.runtimeKey === getRuntimeKey()
+);
+
+const ensureSettingsRuntimeLifecycle = (): void => {
+  if (_settingsLifecycleInitialized || typeof window === 'undefined') return;
+  _settingsLifecycleInitialized = true;
+
+  subscribeRuntimeEndpointWillChange((detail) => {
+    if (detail.runtimeKey === detail.previousRuntimeKey) return;
+    if (_settingsFlushTimer) clearTimeout(_settingsFlushTimer);
+    if (_pendingSettingsChanges) void _flushSettingsUpdate();
+  });
+  subscribeRuntimeEndpointChanged((detail) => {
+    if (detail.runtimeKey === detail.previousRuntimeKey) return;
+    _settingsRuntimeGeneration += 1;
+    _settingsCache = null;
+    _settingsInflight = null;
+  });
+};
+
+const fetchWebSettings = async (context = captureSettingsRuntimeContext()): Promise<DesktopSettings | null> => {
+  ensureSettingsRuntimeLifecycle();
   // Return cached if fresh
-  if (_settingsCache && Date.now() - _settingsCache.at < SETTINGS_CACHE_TTL) {
+  if (_settingsCache && isSameSettingsRuntimeContext(_settingsCache.context, context) && Date.now() - _settingsCache.at < SETTINGS_CACHE_TTL) {
     return _settingsCache.value;
   }
 
   // Dedup concurrent calls
-  if (_settingsInflight) return _settingsInflight;
+  if (_settingsInflight && isSameSettingsRuntimeContext(_settingsInflight.context, context)) return _settingsInflight.promise;
 
-  _settingsInflight = (async (): Promise<DesktopSettings | null> => {
-    const runtimeSettings = getRuntimeSettingsAPI();
-    if (runtimeSettings) {
+  const inflight = {
+    context,
+    promise: (async (): Promise<DesktopSettings | null> => {
+      const runtimeSettings = getRuntimeSettingsAPI();
+      if (runtimeSettings) {
+        try {
+          const result = await runtimeSettings.load();
+          if (!isSettingsRuntimeContextCurrent(context)) return null;
+          const settings = sanitizeWebSettings(result.settings);
+          _settingsCache = { value: settings, at: Date.now(), context };
+          return settings;
+        } catch (error) {
+          if (!isSettingsRuntimeContextCurrent(context)) return null;
+          console.warn('Failed to load shared settings from runtime settings API:', error);
+        }
+      }
+
+      if (!isSettingsRuntimeContextCurrent(context)) return null;
       try {
-        const result = await runtimeSettings.load();
-        const settings = sanitizeWebSettings(result.settings);
-        _settingsCache = { value: settings, at: Date.now() };
+        const response = await runtimeFetch('/api/config/settings', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+        });
+        if (!isSettingsRuntimeContextCurrent(context)) return null;
+        if (!response.ok) {
+          return null;
+        }
+        const data = await response.json().catch(() => null);
+        if (!isSettingsRuntimeContextCurrent(context)) return null;
+        const settings = sanitizeWebSettings(data);
+        _settingsCache = { value: settings, at: Date.now(), context };
         return settings;
       } catch (error) {
-        console.warn('Failed to load shared settings from runtime settings API:', error);
-      }
-    }
-
-    try {
-      const response = await runtimeFetch('/api/config/settings', {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      });
-      if (!response.ok) {
+        if (!isSettingsRuntimeContextCurrent(context)) return null;
+        console.warn('Failed to load shared settings from server:', error);
         return null;
       }
-      const data = await response.json().catch(() => null);
-      const settings = sanitizeWebSettings(data);
-      _settingsCache = { value: settings, at: Date.now() };
-      return settings;
-    } catch (error) {
-      console.warn('Failed to load shared settings from server:', error);
-      return null;
-    }
-  })().finally(() => { _settingsInflight = null; });
+    })(),
+  };
+  _settingsInflight = inflight;
+  void inflight.promise.finally(() => {
+    if (_settingsInflight === inflight) _settingsInflight = null;
+  });
 
-  return _settingsInflight;
+  return inflight.promise;
 };
 
 /** Invalidate cached settings (call after a successful PUT) */
@@ -1307,6 +1511,8 @@ export const syncDesktopSettings = async (): Promise<void> => {
   if (typeof window === 'undefined') {
     return;
   }
+  ensureSettingsRuntimeLifecycle();
+  const context = captureSettingsRuntimeContext();
 
   const persistApi = getPersistApi();
 
@@ -1341,24 +1547,34 @@ export const syncDesktopSettings = async (): Promise<void> => {
   // a TypeError from writing to a contextBridge-protected global) doesn't
   // prevent server settings from reaching the Zustand store.
   const applySettings = async (settings: DesktopSettings) => {
+    if (!isSettingsRuntimeContextCurrent(context)) return;
+    const shouldPersistCraftGoalMigration = settings.draftStartersCraftGoalAdded !== true;
     try {
       persistToLocalStorage(settings);
     } catch (error) {
       console.warn('persistToLocalStorage failed:', error);
     }
     await waitForHydration();
+    if (!isSettingsRuntimeContextCurrent(context)) return;
     try {
       applyDesktopUiPreferences(settings);
     } catch (error) {
       console.warn('applyDesktopUiPreferences failed:', error);
+    }
+    if (shouldPersistCraftGoalMigration) {
+      await updateDesktopSettings({
+        ...(settings.draftStarters ? { draftStarters: settings.draftStarters } : {}),
+        draftStartersCraftGoalAdded: true,
+      });
+      if (!isSettingsRuntimeContextCurrent(context)) return;
     }
 
     dispatchSettingsSynced(settings);
   };
 
   try {
-    const webSettings = await fetchWebSettings();
-    if (webSettings) {
+    const webSettings = await fetchWebSettings(context);
+    if (webSettings && isSettingsRuntimeContextCurrent(context)) {
       await applySettings(webSettings);
     }
   } catch (error) {
@@ -1367,75 +1583,96 @@ export const syncDesktopSettings = async (): Promise<void> => {
 };
 
 // Coalesce rapid updateDesktopSettings calls into a single PUT
-let _pendingSettingsChanges: Partial<DesktopSettings> | null = null;
-let _settingsFlushTimer: ReturnType<typeof setTimeout> | null = null;
-let _settingsFlushWaiters: Array<() => void> = [];
-const SETTINGS_DEBOUNCE_MS = 200;
-
-const _flushSettingsUpdate = async (): Promise<void> => {
+async function _flushSettingsUpdate(): Promise<void> {
   const changes = _pendingSettingsChanges;
+  const context = _pendingSettingsContext;
   const waiters = _settingsFlushWaiters;
   _pendingSettingsChanges = null;
+  _pendingSettingsContext = null;
   _settingsFlushTimer = null;
   _settingsFlushWaiters = [];
-  if (!changes || Object.keys(changes).length === 0) {
-    waiters.forEach((resolve) => resolve());
-    return;
-  }
+  try {
+    if (!changes || !context || Object.keys(changes).length === 0 || !isSettingsRuntimeContextCurrent(context)) {
+      // Nothing will be written — clear any pending "Saving…" indicator.
+      dispatchSettingsSaveState('saved');
+      return;
+    }
 
-  const runtimeSettings = getRuntimeSettingsAPI();
-  if (runtimeSettings) {
+    const runtimeSettings = getRuntimeSettingsAPI();
+    if (runtimeSettings) {
+      try {
+        const updated = await runtimeSettings.save(changes);
+        if (!isSettingsRuntimeContextCurrent(context)) return;
+        if (updated) {
+          persistToLocalStorage(updated);
+          applyDesktopUiPreferences(updated);
+          dispatchSettingsSynced(updated);
+          _settingsCache = null;
+        }
+        dispatchSettingsSaveState(updated ? 'saved' : 'error');
+        return;
+      } catch (error) {
+        if (!isSettingsRuntimeContextCurrent(context)) return;
+        console.warn('Failed to update settings via runtime settings API:', error);
+      }
+    }
+
+    if (!isSettingsRuntimeContextCurrent(context)) return;
     try {
-      const updated = await runtimeSettings.save(changes);
+      const response = await runtimeFetch('/api/config/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(changes),
+      });
+
+      if (!isSettingsRuntimeContextCurrent(context)) return;
+      if (!response.ok) {
+        console.warn('Failed to update shared settings via API:', response.status, response.statusText);
+        dispatchSettingsSaveState('error');
+        return;
+      }
+
+      const updated = (await response.json().catch(() => null)) as DesktopSettings | null;
+      if (!isSettingsRuntimeContextCurrent(context)) return;
       if (updated) {
         persistToLocalStorage(updated);
         applyDesktopUiPreferences(updated);
         dispatchSettingsSynced(updated);
+        dispatchSettingsSaveState('saved');
+        // Invalidate GET cache so next read sees the fresh data
         _settingsCache = null;
+      } else {
+        dispatchSettingsSaveState('error');
       }
-      waiters.forEach((resolve) => resolve());
-      return;
     } catch (error) {
-      console.warn('Failed to update settings via runtime settings API:', error);
+      if (isSettingsRuntimeContextCurrent(context)) {
+        console.warn('Failed to update shared settings via API:', error);
+        dispatchSettingsSaveState('error');
+      }
     }
-  }
-
-  try {
-    const response = await runtimeFetch('/api/config/settings', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(changes),
-    });
-
-    if (!response.ok) {
-      console.warn('Failed to update shared settings via API:', response.status, response.statusText);
-      return;
-    }
-
-    const updated = (await response.json().catch(() => null)) as DesktopSettings | null;
-    if (updated) {
-      persistToLocalStorage(updated);
-      applyDesktopUiPreferences(updated);
-      dispatchSettingsSynced(updated);
-      // Invalidate GET cache so next read sees the fresh data
-      _settingsCache = null;
-    }
-  } catch (error) {
-    console.warn('Failed to update shared settings via API:', error);
   } finally {
     waiters.forEach((resolve) => resolve());
   }
-};
+}
 
 export const updateDesktopSettings = async (changes: Partial<DesktopSettings>): Promise<void> => {
   if (typeof window === 'undefined') {
     return;
   }
+  ensureSettingsRuntimeLifecycle();
+  const context = captureSettingsRuntimeContext();
+
+  if (_pendingSettingsContext && !isSameSettingsRuntimeContext(_pendingSettingsContext, context)) {
+    if (_settingsFlushTimer) clearTimeout(_settingsFlushTimer);
+    void _flushSettingsUpdate();
+  }
 
   _pendingSettingsChanges = { ...(_pendingSettingsChanges ?? {}), ...changes };
+  _pendingSettingsContext = context;
+  dispatchSettingsSaveState('saving');
 
   if (_settingsFlushTimer) {
     clearTimeout(_settingsFlushTimer);

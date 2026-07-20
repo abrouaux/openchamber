@@ -27,6 +27,7 @@ export const createSettingsHelpers = (dependencies) => {
   const PWA_ORIENTATION_VALUES = new Set(['system', 'portrait', 'landscape']);
   const MOBILE_KEYBOARD_MODE_VALUES = new Set(['native', 'resize-content']);
   const REASONING_MODE_VALUES = new Set(['off', 'collapsible-hidden', 'collapsible-dynamic', 'full']);
+  const TERMINAL_SHELL_VALUES = new Set(['auto', 'bash', 'zsh', 'sh', 'fish', 'pwsh', 'powershell', 'cmd', 'dash', 'ksh', 'nu']);
 
   /**
    * Resolve a reasoningMode enum from a candidate settings object, accepting
@@ -205,6 +206,30 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.desktopLanAccessEnabled === 'boolean') {
       result.desktopLanAccessEnabled = candidate.desktopLanAccessEnabled;
     }
+    if (typeof candidate.desktopKeepAwakeEnabled === 'boolean') {
+      result.desktopKeepAwakeEnabled = candidate.desktopKeepAwakeEnabled;
+    }
+    if (typeof candidate.desktopMinimizeToTrayEnabled === 'boolean') {
+      result.desktopMinimizeToTrayEnabled = candidate.desktopMinimizeToTrayEnabled;
+    }
+    if (typeof candidate.desktopWindowControlsPosition === 'string') {
+      const mode = candidate.desktopWindowControlsPosition.trim();
+      if (mode === 'auto' || mode === 'left' || mode === 'right') {
+        result.desktopWindowControlsPosition = mode;
+      }
+    }
+    if (candidate.permissionAutoAccept && typeof candidate.permissionAutoAccept === 'object' && !Array.isArray(candidate.permissionAutoAccept)) {
+      const sessions = {};
+      const sourceSessions = candidate.permissionAutoAccept.sessions;
+      if (sourceSessions && typeof sourceSessions === 'object' && !Array.isArray(sourceSessions)) {
+        for (const [sessionId, enabled] of Object.entries(sourceSessions)) {
+          if (sessionId && typeof enabled === 'boolean') sessions[sessionId] = enabled;
+        }
+      }
+      result.permissionAutoAccept = {
+        sessions,
+      };
+    }
     if (typeof candidate.desktopUiPassword === 'string') {
       result.desktopUiPassword = candidate.desktopUiPassword.trim();
     }
@@ -269,6 +294,21 @@ export const createSettingsHelpers = (dependencies) => {
     const resolvedReasoning = resolveReasoningMode(candidate);
     if (resolvedReasoning) {
       result.reasoningMode = resolvedReasoning;
+    }
+    if (typeof candidate.sessionRecapEnabled === 'boolean') {
+      result.sessionRecapEnabled = candidate.sessionRecapEnabled;
+    }
+    if (typeof candidate.sessionSuggestionEnabled === 'boolean') {
+      result.sessionSuggestionEnabled = candidate.sessionSuggestionEnabled;
+    }
+    if (typeof candidate.sessionGoalEnabled === 'boolean') {
+      result.sessionGoalEnabled = candidate.sessionGoalEnabled;
+    }
+    if (typeof candidate.sessionGoalDefaultBudgetEnabled === 'boolean') {
+      result.sessionGoalDefaultBudgetEnabled = candidate.sessionGoalDefaultBudgetEnabled;
+    }
+    if (typeof candidate.sessionGoalDefaultBudget === 'number' && Number.isFinite(candidate.sessionGoalDefaultBudget) && candidate.sessionGoalDefaultBudget > 0) {
+      result.sessionGoalDefaultBudget = Math.floor(candidate.sessionGoalDefaultBudget);
     }
     if (typeof candidate.showTextJustificationActivity === 'boolean') {
       result.showTextJustificationActivity = candidate.showTextJustificationActivity;
@@ -396,6 +436,13 @@ export const createSettingsHelpers = (dependencies) => {
       const trimmed = candidate.defaultAgent.trim();
       result.defaultAgent = trimmed.length > 0 ? trimmed : undefined;
     }
+    if (typeof candidate.smallModelUseDefault === 'boolean') {
+      result.smallModelUseDefault = candidate.smallModelUseDefault;
+    }
+    if (typeof candidate.smallModelOverride === 'string') {
+      const trimmed = candidate.smallModelOverride.trim();
+      result.smallModelOverride = trimmed.length > 0 ? trimmed : undefined;
+    }
     if (typeof candidate.defaultGitIdentityId === 'string') {
       const trimmed = candidate.defaultGitIdentityId.trim();
       result.defaultGitIdentityId = trimmed.length > 0 ? trimmed : undefined;
@@ -511,6 +558,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.stickyUserHeader === 'boolean') {
       result.stickyUserHeader = candidate.stickyUserHeader;
     }
+    if (typeof candidate.promptNavigatorEnabled === 'boolean') {
+      result.promptNavigatorEnabled = candidate.promptNavigatorEnabled;
+    }
     if (typeof candidate.expandedEditorToolbar === 'boolean') {
       result.expandedEditorToolbar = candidate.expandedEditorToolbar;
     }
@@ -522,6 +572,16 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.terminalFontSize === 'number' && Number.isFinite(candidate.terminalFontSize)) {
       result.terminalFontSize = Math.max(9, Math.min(52, Math.round(candidate.terminalFontSize)));
+    }
+    if (typeof candidate.terminalShell === 'string') {
+      const shell = candidate.terminalShell.trim().toLowerCase();
+      if (TERMINAL_SHELL_VALUES.has(shell)) result.terminalShell = shell;
+    }
+    if (Array.isArray(candidate.terminalLoginShells)) {
+      result.terminalLoginShells = [...new Set(candidate.terminalLoginShells
+        .filter((shell) => typeof shell === 'string')
+        .map((shell) => shell.trim().toLowerCase())
+        .filter((shell) => TERMINAL_SHELL_VALUES.has(shell)))];
     }
     if (typeof candidate.padding === 'number' && Number.isFinite(candidate.padding)) {
       result.padding = Math.max(50, Math.min(200, Math.round(candidate.padding)));
@@ -743,10 +803,18 @@ export const createSettingsHelpers = (dependencies) => {
       }
     }
 
+    if (typeof candidate.dictationEnabled === 'boolean') {
+      result.dictationEnabled = candidate.dictationEnabled;
+    }
     if (typeof candidate.sttProvider === 'string') {
       const provider = candidate.sttProvider.trim();
-      if (provider === 'browser' || provider === 'server' || provider === 'wasm') {
+      if (provider === 'local' || provider === 'openai-compatible') {
         result.sttProvider = provider;
+      } else if (provider === 'server') {
+        // Legacy provider migration: 'server' was the OpenAI-compatible endpoint.
+        result.sttProvider = 'openai-compatible';
+      } else if (provider === 'browser' || provider === 'wasm') {
+        result.sttProvider = 'local';
       }
     }
     if (typeof candidate.sttServerUrl === 'string') {
@@ -761,10 +829,10 @@ export const createSettingsHelpers = (dependencies) => {
         result.sttModel = trimmed;
       }
     }
-    if (typeof candidate.wasmSttModel === 'string') {
-      const trimmed = candidate.wasmSttModel.trim();
-      if (trimmed.length <= 256) {
-        result.wasmSttModel = trimmed;
+    if (typeof candidate.sttLocalModel === 'string') {
+      const trimmed = candidate.sttLocalModel.trim();
+      if (trimmed.length <= STT_MODEL_MAX_LENGTH) {
+        result.sttLocalModel = trimmed;
       }
     }
     if (typeof candidate.sttLanguage === 'string') {
@@ -772,15 +840,6 @@ export const createSettingsHelpers = (dependencies) => {
       if (trimmed.length <= STT_LANGUAGE_MAX_LENGTH) {
         result.sttLanguage = trimmed;
       }
-    }
-    if (typeof candidate.sttSilenceThresholdDb === 'number' && Number.isFinite(candidate.sttSilenceThresholdDb)) {
-      result.sttSilenceThresholdDb = Math.max(-100, Math.min(0, candidate.sttSilenceThresholdDb));
-    }
-    if (typeof candidate.sttSilenceHoldMs === 'number' && Number.isFinite(candidate.sttSilenceHoldMs)) {
-      result.sttSilenceHoldMs = Math.max(250, Math.min(10000, Math.round(candidate.sttSilenceHoldMs)));
-    }
-    if (typeof candidate.sttTranscribeOnStop === 'boolean') {
-      result.sttTranscribeOnStop = candidate.sttTranscribeOnStop;
     }
 
     return result;
