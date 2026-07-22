@@ -58,6 +58,7 @@ export type DesktopSettings = {
   desktopLanAccessEnabled?: boolean;
   desktopKeepAwakeEnabled?: boolean;
   desktopMinimizeToTrayEnabled?: boolean;
+  desktopMacMenuBarEnabled?: boolean;
   desktopUiPassword?: string;
   projects?: ProjectEntry[];
   activeProjectId?: string;
@@ -227,6 +228,7 @@ type ElectronRuntimeGlobal = {
   runtime?: string;
   macVibrancy?: boolean;
   macVibrancySupported?: boolean;
+  trayEnabled?: boolean;
 };
 
 const getElectronRuntime = (): ElectronRuntimeGlobal | null => {
