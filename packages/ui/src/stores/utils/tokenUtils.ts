@@ -105,10 +105,29 @@ export const computeSessionCostAndCounts = (messages: Message[]): SessionCostAnd
     let assistantCount = 0;
 
     for (let i = 0; i < messages.length; i++) {
-        const msg = messages[i] as { role?: string; cost?: number };
-        if (msg.role === 'user') {
+        const msg = messages[i] as Message & {
+            role?: string;
+            cost?: number;
+            clientRole?: string;
+            userMessageMarker?: boolean;
+            origin?: string;
+            source?: string;
+        };
+
+        const isUser =
+            msg.userMessageMarker === true ||
+            msg.clientRole === 'user' ||
+            msg.role === 'user' ||
+            msg.origin === 'user' ||
+            msg.source === 'user';
+
+        if (isUser) {
             userCount++;
-        } else if (msg.role === 'assistant') {
+            continue;
+        }
+
+        const role = msg.clientRole || msg.role || 'assistant';
+        if (role === 'assistant') {
             assistantCount++;
             if (typeof msg.cost === 'number' && Number.isFinite(msg.cost) && msg.cost > 0) {
                 totalCost += msg.cost;
@@ -162,14 +181,36 @@ export const computeSessionTokenRate = (
         if (getParts && msg.id) {
             const parts = getParts(msg.id);
             if (parts) {
+                const intervals: Array<[number, number]> = [];
                 for (let j = 0; j < parts.length; j++) {
                     const part = parts[j];
                     if (part.type !== 'tool') continue;
                     const toolTime = (part.state as { time?: { start?: number; end?: number } } | undefined)?.time;
-                    if (toolTime && typeof toolTime.start === 'number' && typeof toolTime.end === 'number') {
-                        const toolDuration = toolTime.end - toolTime.start;
-                        if (toolDuration > 0) durationMs -= toolDuration;
+                    if (
+                        toolTime &&
+                        typeof toolTime.start === 'number' &&
+                        typeof toolTime.end === 'number' &&
+                        toolTime.end > toolTime.start
+                    ) {
+                        intervals.push([toolTime.start, toolTime.end]);
                     }
+                }
+                if (intervals.length > 0) {
+                    intervals.sort((a, b) => a[0] - b[0]);
+                    let totalToolMs = 0;
+                    let mergeStart = intervals[0][0];
+                    let mergeEnd = intervals[0][1];
+                    for (let k = 1; k < intervals.length; k++) {
+                        if (intervals[k][0] <= mergeEnd) {
+                            mergeEnd = Math.max(mergeEnd, intervals[k][1]);
+                        } else {
+                            totalToolMs += mergeEnd - mergeStart;
+                            mergeStart = intervals[k][0];
+                            mergeEnd = intervals[k][1];
+                        }
+                    }
+                    totalToolMs += mergeEnd - mergeStart;
+                    durationMs -= totalToolMs;
                 }
             }
         }
