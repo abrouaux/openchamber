@@ -148,6 +148,7 @@ export type DesktopSettings = {
   inputSpellcheckEnabled?: boolean;
   showOpenCodeUpdateNotifications?: boolean;
   agentControlToolEnabled?: boolean;
+  optimizeSystemPrompt?: boolean;
   openCodeUpdateToastDismissedVersion?: string;
   showToolFileIcons?: boolean;
   codeBlockLineWrap?: boolean;
@@ -230,6 +231,7 @@ type DesktopBridgeGlobal = {
 
 type ElectronRuntimeGlobal = {
   runtime?: string;
+  arch?: string;
   macVibrancy?: boolean;
   macVibrancySupported?: boolean;
   trayEnabled?: boolean;
