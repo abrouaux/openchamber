@@ -18,6 +18,7 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { cn } from '@/lib/utils';
 import { computeSessionCostAndCounts, computeSessionTokenRate } from '@/stores/utils/tokenUtils';
+import { useSessionSubtreeCost, withSubtreeCost } from '@/sync/session-cost';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -670,6 +671,7 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const currentSessionMessages = useSessionMessages(currentSessionId ?? '');
   const currentSessionMessagesResolved = useSessionMessagesResolved(currentSessionId ?? '');
+  const subtreeCost = useSessionSubtreeCost(currentSessionId ?? null);
   const quotaResults = useQuotaStore((state) => state.results);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isQuotaLoading = useQuotaStore((state) => state.isLoading);
@@ -758,6 +760,10 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
       lastTokensPerSecond: lastTokensPerSecond > 0 ? lastTokensPerSecond : undefined,
     };
   }, [contextLimit, currentSessionId, currentSessionMessages, headerMessageSummary.lastMessageId, headerMessageSummary.lastTokens, outputLimit]);
+  const contextUsageWithSubtree = React.useMemo(
+    () => withSubtreeCost(contextUsage, subtreeCost),
+    [contextUsage, subtreeCost],
+  );
   const [stableContextUsage, setStableContextUsage] = React.useState<SessionContextUsage | null>(null);
   const isContextUsageResolvedForSession = !currentSessionId || currentSessionMessagesResolved;
 
@@ -767,27 +773,29 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
       return;
     }
 
-    if (contextUsage && contextUsage.totalTokens > 0) {
+    if (contextUsageWithSubtree && contextUsageWithSubtree.totalTokens > 0) {
       setStableContextUsage((prev) => {
         if (
           prev
-          && prev.totalTokens === contextUsage.totalTokens
-          && prev.percentage === contextUsage.percentage
-          && prev.contextLimit === contextUsage.contextLimit
-          && (prev.outputLimit ?? 0) === (contextUsage.outputLimit ?? 0)
-          && (prev.normalizedOutput ?? 0) === (contextUsage.normalizedOutput ?? 0)
-          && prev.thresholdLimit === contextUsage.thresholdLimit
-          && prev.lastMessageId === contextUsage.lastMessageId
-          && (prev.cost ?? 0) === (contextUsage.cost ?? 0)
-          && (prev.totalMessages ?? 0) === (contextUsage.totalMessages ?? 0)
-          && (prev.userMessages ?? 0) === (contextUsage.userMessages ?? 0)
-          && (prev.assistantMessages ?? 0) === (contextUsage.assistantMessages ?? 0)
-          && (prev.tokensPerSecond ?? 0) === (contextUsage.tokensPerSecond ?? 0)
-          && (prev.lastTokensPerSecond ?? 0) === (contextUsage.lastTokensPerSecond ?? 0)
+          && prev.totalTokens === contextUsageWithSubtree.totalTokens
+          && prev.percentage === contextUsageWithSubtree.percentage
+          && prev.contextLimit === contextUsageWithSubtree.contextLimit
+          && (prev.outputLimit ?? 0) === (contextUsageWithSubtree.outputLimit ?? 0)
+          && (prev.normalizedOutput ?? 0) === (contextUsageWithSubtree.normalizedOutput ?? 0)
+          && prev.thresholdLimit === contextUsageWithSubtree.thresholdLimit
+          && prev.lastMessageId === contextUsageWithSubtree.lastMessageId
+          && (prev.cost ?? 0) === (contextUsageWithSubtree.cost ?? 0)
+          && (prev.sessionCost ?? 0) === (contextUsageWithSubtree.sessionCost ?? 0)
+          && (prev.costPending ?? false) === (contextUsageWithSubtree.costPending ?? false)
+          && (prev.totalMessages ?? 0) === (contextUsageWithSubtree.totalMessages ?? 0)
+          && (prev.userMessages ?? 0) === (contextUsageWithSubtree.userMessages ?? 0)
+          && (prev.assistantMessages ?? 0) === (contextUsageWithSubtree.assistantMessages ?? 0)
+          && (prev.tokensPerSecond ?? 0) === (contextUsageWithSubtree.tokensPerSecond ?? 0)
+          && (prev.lastTokensPerSecond ?? 0) === (contextUsageWithSubtree.lastTokensPerSecond ?? 0)
         ) {
           return prev;
         }
-        return contextUsage;
+        return contextUsageWithSubtree;
       });
       return;
     }
@@ -795,7 +803,7 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
     if (isContextUsageResolvedForSession) {
       setStableContextUsage((prev) => (prev === null ? prev : null));
     }
-  }, [contextUsage, currentSessionId, isContextUsageResolvedForSession]);
+  }, [contextUsageWithSubtree, currentSessionId, isContextUsageResolvedForSession]);
 
   const rateLimitGroups = React.useMemo(() => {
     const groups: Array<{
@@ -1053,6 +1061,8 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
           contextLimit={stableContextUsage.contextLimit}
           outputLimit={stableContextUsage.outputLimit ?? 0}
           cost={stableContextUsage.cost}
+          sessionCost={stableContextUsage.sessionCost}
+          costPending={stableContextUsage.costPending}
           totalMessages={stableContextUsage.totalMessages}
           userMessages={stableContextUsage.userMessages}
           assistantMessages={stableContextUsage.assistantMessages}

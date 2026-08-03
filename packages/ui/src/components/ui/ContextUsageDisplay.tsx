@@ -12,7 +12,12 @@ interface ContextUsageDisplayProps {
   colorPercentage?: number;
   contextLimit: number;
   outputLimit?: number;
+  /** Total cost: current session + all descendant sessions (recursive). */
   cost?: number;
+  /** Cost of the current session only, shown as a breakdown next to the total. */
+  sessionCost?: number;
+  /** True while descendant cost is still loading or accumulating (total is a lower bound). */
+  costPending?: boolean;
   totalMessages?: number;
   userMessages?: number;
   assistantMessages?: number;
@@ -40,6 +45,8 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   contextLimit,
   outputLimit,
   cost,
+  sessionCost,
+  costPending = false,
   totalMessages,
   userMessages,
   assistantMessages,
@@ -78,15 +85,21 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
 
   const formatCost = (value: number): string => {
     const locale = getCurrentIntlLocale();
+    const fractionDigits = value > 0 && value < 0.01 ? 4 : 2;
     return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
     }).format(value);
   };
 
   const showCost = typeof cost === 'number' && Number.isFinite(cost) && cost > 0;
+  const hasSessionCost = typeof sessionCost === 'number' && Number.isFinite(sessionCost) && sessionCost > 0;
+  // Breakdown ("Session Cost" / "Total Cost") only makes sense when the two
+  // figures differ or the total is still growing.
+  const showCostBreakdown = showCost && hasSessionCost && (costPending || cost! - sessionCost! > 1e-9);
+  const pendingMark = costPending ? '…' : '';
   const showTokensPerSecond = typeof tokensPerSecond === 'number' && Number.isFinite(tokensPerSecond) && tokensPerSecond > 0;
   const showLastTokensPerSecond = typeof lastTokensPerSecond === 'number' && Number.isFinite(lastTokensPerSecond) && lastTokensPerSecond > 0;
 
@@ -109,7 +122,14 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
     t('contextUsage.tooltip.contextLimit', { tokens: formatTokens(contextLimit) }),
     t('contextUsage.tooltip.outputLimit', { tokens: formatTokens(safeOutputLimit) }),
     ...(hasStats ? ['---'] : []),
-    ...(showCost ? [t('contextSidebar.stats.cost') + ': ' + formatCost(cost!)] : []),
+    ...(showCostBreakdown
+      ? [
+        t('contextSidebar.stats.sessionCost') + ': ' + formatCost(sessionCost!),
+        t('contextSidebar.stats.totalCost') + ': ' + formatCost(cost!) + pendingMark,
+      ]
+      : []),
+    ...(showCost && !showCostBreakdown ? [t('contextSidebar.stats.cost') + ': ' + formatCost(cost!) + pendingMark] : []),
+    ...(costPending ? [t('contextUsage.tooltip.costPending')] : []),
     ...(typeof totalMessages === 'number' ? [t('contextSidebar.stats.messages') + ': ' + formatNumber(totalMessages)] : []),
     ...(typeof userMessages === 'number' ? [t('contextSidebar.stats.user') + ': ' + formatNumber(userMessages)] : []),
     ...(typeof assistantMessages === 'number' ? [t('contextSidebar.stats.assistant') + ': ' + formatNumber(assistantMessages)] : []),
@@ -120,7 +140,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   const isInteractive = !isMobile && typeof onClick === 'function';
 
   const costSuffix = showCost ? (
-    <span className="text-muted-foreground/60">{`・ ${formatCost(cost!)}`}</span>
+    <span className="text-muted-foreground/60">{`・ ${formatCost(cost!)}${pendingMark}`}</span>
   ) : null;
 
   const contextContent = (
@@ -235,11 +255,22 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
             </div>
             {hasStats && (
               <div className="rounded-xl border border-border/40 bg-sidebar/30 px-3 py-2 space-y-1">
+                {showCostBreakdown && (
+                  <div className="flex justify-between items-center">
+                    <span className="typography-meta text-muted-foreground">{t('contextSidebar.stats.sessionCost')}</span>
+                    <span className="typography-meta text-foreground font-medium">{formatCost(sessionCost!)}</span>
+                  </div>
+                )}
                 {showCost && (
                   <div className="flex justify-between items-center">
-                    <span className="typography-meta text-muted-foreground">{t('contextSidebar.stats.cost')}</span>
-                    <span className="typography-meta text-foreground font-medium">{formatCost(cost!)}</span>
+                    <span className="typography-meta text-muted-foreground">
+                      {showCostBreakdown ? t('contextSidebar.stats.totalCost') : t('contextSidebar.stats.cost')}
+                    </span>
+                    <span className="typography-meta text-foreground font-medium">{formatCost(cost!)}{pendingMark}</span>
                   </div>
+                )}
+                {costPending && (
+                  <div className="typography-micro text-muted-foreground/70">{t('contextUsage.tooltip.costPending')}</div>
                 )}
                 {typeof totalMessages === 'number' && (
                   <div className="flex justify-between items-center">
