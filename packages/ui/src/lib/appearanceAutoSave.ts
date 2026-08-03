@@ -30,6 +30,7 @@ type AppearanceSlice = {
   summaryLength: number;
   maxLastMessageLength: number;
   autoDeleteEnabled: boolean;
+  autoSaveEnabled: boolean;
   autoDeleteAfterDays: number;
   sessionRetentionAction: 'archive' | 'delete';
   fontSize: number;
@@ -76,6 +77,7 @@ export const startAppearanceAutoSave = (): void => {
     summaryLength: useUIStore.getState().summaryLength,
     maxLastMessageLength: useUIStore.getState().maxLastMessageLength,
     autoDeleteEnabled: useUIStore.getState().autoDeleteEnabled,
+    autoSaveEnabled: useUIStore.getState().autoSaveEnabled,
     autoDeleteAfterDays: useUIStore.getState().autoDeleteAfterDays,
     sessionRetentionAction: useUIStore.getState().sessionRetentionAction,
     fontSize: useUIStore.getState().fontSize,
@@ -114,6 +116,7 @@ export const startAppearanceAutoSave = (): void => {
       summaryLength: state.summaryLength,
       maxLastMessageLength: state.maxLastMessageLength,
       autoDeleteEnabled: state.autoDeleteEnabled,
+      autoSaveEnabled: state.autoSaveEnabled,
       autoDeleteAfterDays: state.autoDeleteAfterDays,
       sessionRetentionAction: state.sessionRetentionAction,
       fontSize: state.fontSize,
@@ -189,6 +192,9 @@ export const startAppearanceAutoSave = (): void => {
     }
     if (current.autoDeleteEnabled !== previous.autoDeleteEnabled) {
       diff.autoDeleteEnabled = current.autoDeleteEnabled;
+    }
+    if (current.autoSaveEnabled !== previous.autoSaveEnabled) {
+      diff.autoSaveEnabled = current.autoSaveEnabled;
     }
     if (current.autoDeleteAfterDays !== previous.autoDeleteAfterDays) {
       diff.autoDeleteAfterDays = current.autoDeleteAfterDays;
