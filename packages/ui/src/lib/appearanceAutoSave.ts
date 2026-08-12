@@ -7,6 +7,8 @@ import type { MobileKeyboardMode } from '@/lib/mobileKeyboardMode';
 
 type AppearanceSlice = {
   reasoningMode: ReasoningMode;
+  workStatusPanelEnabled: boolean;
+  workStatusHiddenSections: string[];
   sessionRecapEnabled: boolean;
   sessionSuggestionEnabled: boolean;
   sessionGoalEnabled: boolean;
@@ -59,6 +61,8 @@ export const startAppearanceAutoSave = (): void => {
 
   let previous: AppearanceSlice = {
     reasoningMode: useUIStore.getState().reasoningMode,
+    workStatusPanelEnabled: useUIStore.getState().workStatusPanelEnabled,
+    workStatusHiddenSections: useUIStore.getState().workStatusHiddenSections,
     sessionRecapEnabled: useUIStore.getState().sessionRecapEnabled,
     sessionSuggestionEnabled: useUIStore.getState().sessionSuggestionEnabled,
     sessionGoalEnabled: useUIStore.getState().sessionGoalEnabled,
@@ -98,6 +102,8 @@ export const startAppearanceAutoSave = (): void => {
   useUIStore.subscribe((state) => {
     const current: AppearanceSlice = {
       reasoningMode: state.reasoningMode,
+      workStatusPanelEnabled: state.workStatusPanelEnabled,
+      workStatusHiddenSections: state.workStatusHiddenSections,
       sessionRecapEnabled: state.sessionRecapEnabled,
       sessionSuggestionEnabled: state.sessionSuggestionEnabled,
       sessionGoalEnabled: state.sessionGoalEnabled,
@@ -138,6 +144,14 @@ export const startAppearanceAutoSave = (): void => {
 
     if (current.reasoningMode !== previous.reasoningMode) {
       diff.reasoningMode = current.reasoningMode;
+    }
+    if (current.workStatusPanelEnabled !== previous.workStatusPanelEnabled) {
+      diff.workStatusPanelEnabled = current.workStatusPanelEnabled;
+    }
+    // Compared by content: the store hands back a new array on every change,
+    // so an identity check would push a write on unrelated store updates.
+    if (current.workStatusHiddenSections.join('\u0000') !== previous.workStatusHiddenSections.join('\u0000')) {
+      diff.workStatusHiddenSections = current.workStatusHiddenSections;
     }
     if (current.sessionRecapEnabled !== previous.sessionRecapEnabled) {
       diff.sessionRecapEnabled = current.sessionRecapEnabled;

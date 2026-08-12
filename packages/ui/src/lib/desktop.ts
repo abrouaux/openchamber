@@ -70,6 +70,10 @@ export type DesktopSettings = {
   reasoningMode?: ReasoningMode;
   /** @deprecated Use `reasoningMode`. Accepted for backward-compat migration. */
   showReasoningTraces?: boolean;
+  /** Whether the in-chat work-status panel may render. */
+  workStatusPanelEnabled?: boolean;
+  /** Work-status panel sections the user switched off. */
+  workStatusHiddenSections?: string[];
   /** @deprecated Use `reasoningMode`. Accepted for backward-compat migration. */
   collapsibleThinkingBlocks?: boolean;
   showDeletionDialog?: boolean;
@@ -96,10 +100,7 @@ export type DesktopSettings = {
   summaryLength?: number;
   maxLastMessageLength?: number;
 
-  usageAutoRefresh?: boolean;
-  usageRefreshIntervalMs?: number;
   usageDisplayMode?: 'usage' | 'remaining';
-  usageShowPredValues?: boolean;
   usageDropdownProviders?: string[];
   usageSelectedModels?: Record<string, string[]>;  // Map of providerId -> selected model names
   usageCollapsedFamilies?: Record<string, string[]>;  // Map of providerId -> collapsed family IDs (UsagePage)
@@ -240,8 +241,6 @@ type DesktopBridgeGlobal = {
 type ElectronRuntimeGlobal = {
   runtime?: string;
   arch?: string;
-  macVibrancy?: boolean;
-  macVibrancySupported?: boolean;
   trayEnabled?: boolean;
 };
 
@@ -534,6 +533,27 @@ export const isDesktopShell = (): boolean => {
   return isElectronShell();
 };
 
+/**
+ * Raises the desktop window.
+ *
+ * Used when work finishes somewhere the app cannot be reached from — an MCP
+ * authorization completing in the system browser, for instance. Browsers will
+ * not follow a custom-protocol link back without a user gesture, so the app
+ * brings itself forward instead of asking the page to do it.
+ */
+export const focusDesktopWindow = async (): Promise<boolean> => {
+  if (!isDesktopShell()) return false;
+  try {
+    return Boolean(await invokeDesktop('desktop_focus_window'));
+  } catch {
+    return false;
+  }
+};
+
+export const canRequestNativeDirectoryAccess = (): boolean => (
+  isDesktopShell() && hasDesktopInvoke() && isDesktopLocalOriginActive()
+);
+
 export const startDesktopWindowDrag = async (): Promise<boolean> => {
   if (!isDesktopShell()) {
     return false;
@@ -589,12 +609,13 @@ export const requestDirectoryAccess = async (
   directoryPath: string
 ): Promise<{ success: boolean; path?: string; projectId?: string; error?: string }> => {
   // Desktop shell on local instance: use native folder picker.
-  if (hasDesktopInvoke() && isDesktopLocalOriginActive()) {
+  if (canRequestNativeDirectoryAccess()) {
     try {
       const selected = await getDesktopBridge()?.openDialog?.({
         directory: true,
         multiple: false,
         title: 'Select Working Directory',
+        ...(directoryPath ? { defaultPath: directoryPath } : {}),
       });
       if (!selected || typeof selected !== 'string') {
         return { success: false, error: 'Directory selection cancelled' };
@@ -606,7 +627,7 @@ export const requestDirectoryAccess = async (
     }
   }
 
-  return { success: true, path: directoryPath };
+  return { success: false, error: 'Native directory picker not available' };
 };
 
 const isDesktopFileGrantResult = (
