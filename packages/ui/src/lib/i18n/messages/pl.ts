@@ -1571,6 +1571,7 @@ export const dict: Record<I18nKey, string> = {
   'contextSidebar.stats.cost': 'Koszt',
   'contextSidebar.stats.sessionCost': 'Koszt sesji',
   'contextSidebar.stats.totalCost': 'Koszt całkowity',
+  'contextSidebar.stats.revertedCost': 'Koszt cofnięty',
   'contextUsage.tooltip.costPending': 'Obejmuje podsesje, które nadal działają lub się wczytują',
   'contextSidebar.stats.tokensPerSecond': 'Tokens/s',
   'contextSidebar.stats.lastTokensPerSecond': 'Ostatni tok/s',

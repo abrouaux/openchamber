@@ -1354,6 +1354,7 @@ export const dict: Record<I18nKey, string> = {
   'contextSidebar.stats.cost': '成本',
   'contextSidebar.stats.sessionCost': '会话成本',
   'contextSidebar.stats.totalCost': '总成本',
+  'contextSidebar.stats.revertedCost': '已还原成本',
   'contextUsage.tooltip.costPending': '包含仍在运行或加载的子会话',
   'contextSidebar.stats.tokensPerSecond': 'Tokens/s',
   'contextSidebar.stats.lastTokensPerSecond': '最近 tok/s',

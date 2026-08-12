@@ -1364,6 +1364,7 @@ export const dict: Record<I18nKey, string> = {
   'contextSidebar.stats.cost': '成本',
   'contextSidebar.stats.sessionCost': '工作階段成本',
   'contextSidebar.stats.totalCost': '總成本',
+  'contextSidebar.stats.revertedCost': '已還原成本',
   'contextUsage.tooltip.costPending': '包含仍在執行或載入的子工作階段',
   'contextSidebar.stats.tokensPerSecond': 'Tokens/s',
   'contextSidebar.stats.lastTokensPerSecond': '最近 tok/s',

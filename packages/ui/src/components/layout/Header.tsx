@@ -395,6 +395,7 @@ const isSameContextUsage = (
     && (a.lastMessageId ?? '') === (b.lastMessageId ?? '')
     && (a.cost ?? 0) === (b.cost ?? 0)
     && (a.sessionCost ?? 0) === (b.sessionCost ?? 0)
+    && (a.revertedCost ?? 0) === (b.revertedCost ?? 0)
     && (a.costPending ?? false) === (b.costPending ?? false)
     && (a.totalMessages ?? 0) === (b.totalMessages ?? 0)
     && (a.userMessages ?? 0) === (b.userMessages ?? 0)
@@ -2114,6 +2115,7 @@ export const Header: React.FC<HeaderProps> = ({
               outputLimit={stableDesktopContextUsage.outputLimit ?? 0}
               cost={stableDesktopContextUsage.cost}
               sessionCost={stableDesktopContextUsage.sessionCost}
+              revertedCost={stableDesktopContextUsage.revertedCost}
               costPending={stableDesktopContextUsage.costPending}
               totalMessages={stableDesktopContextUsage.totalMessages}
               userMessages={stableDesktopContextUsage.userMessages}

@@ -48,6 +48,8 @@ export interface SessionContextUsage {
     cost?: number;
     /** Cost of the current session only (before subtree aggregation). */
     sessionCost?: number;
+    /** Cost spent on branches removed with revert. */
+    revertedCost?: number;
     /** True while descendant coverage is incomplete or still accumulating. */
     costPending?: boolean;
     totalMessages?: number;

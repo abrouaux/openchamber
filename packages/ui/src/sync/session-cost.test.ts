@@ -67,6 +67,26 @@ describe("computeSubtreeCost", () => {
         expect(result.pending).toBe(false)
     })
 
+    test("separates reverted messages and their descendant session costs", () => {
+        const { source } = createSource({
+            sessions: [
+                { ...session("root"), revert: { messageID: "msg_2" } } as Session,
+                session("child", "root"),
+            ],
+            messages: {
+                root: [assistant("msg_1", 1), assistant("msg_2", 0.5)],
+                child: [assistant("child_1", 0.25)],
+            },
+        })
+
+        const result = computeSubtreeCost("root", source)
+        expect(result.sessionCost).toBe(1)
+        expect(result.descendantCost).toBe(0)
+        expect(result.totalCost).toBe(1)
+        expect(result.revertedCost).toBe(0.75)
+        expect(result.pending).toBe(false)
+    })
+
     test("does not double-count on cyclic parent references", () => {
         const { source } = createSource({
             sessions: [session("root", "child"), session("child", "root")],
@@ -172,11 +192,13 @@ describe("withSubtreeCost", () => {
             sessionCost: 1,
             descendantCost: 0.5,
             totalCost: 1.5,
+            revertedCost: 0.25,
             hasDescendants: true,
             pending: true,
         })
-        expect(merged?.cost).toBe(1.5)
+        expect(merged?.cost).toBe(1.75)
         expect(merged?.sessionCost).toBe(1)
+        expect(merged?.revertedCost).toBe(0.25)
         expect(merged?.costPending).toBe(true)
     })
 
@@ -192,6 +214,7 @@ describe("withSubtreeCost", () => {
             sessionCost: 0,
             descendantCost: 0,
             totalCost: 0,
+            revertedCost: 0,
             hasDescendants: false,
             pending: false,
         })

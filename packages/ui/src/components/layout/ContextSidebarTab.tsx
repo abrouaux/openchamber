@@ -424,7 +424,7 @@ export const ContextPanelContent: React.FC = () => {
     );
   }
 
-  const subtreeTotalCost = subtreeCost?.totalCost ?? viewModel.totalAssistantCost;
+  const subtreeTotalCost = subtreeCost ? subtreeCost.totalCost + subtreeCost.revertedCost : viewModel.totalAssistantCost;
   const costPendingMark = subtreeCost?.pending ? '…' : '';
 
   const segments: Array<{ key: string; label: string; value: number; color: string }> = [
@@ -486,6 +486,7 @@ export const ContextPanelContent: React.FC = () => {
             { label: t('contextSidebar.stats.tokensPerSecond'), value: viewModel.tokensPerSecond != null ? `${viewModel.tokensPerSecond.toFixed(1)} tok/s` : '—' },
             { label: t('contextSidebar.stats.sessionCost'), value: formatMoney(viewModel.totalAssistantCost) },
             { label: t('contextSidebar.stats.totalCost'), value: `${formatMoney(subtreeTotalCost)}${costPendingMark}` },
+            { label: t('contextSidebar.stats.revertedCost'), value: formatMoney(subtreeCost?.revertedCost ?? 0) },
           ] as const).map((item) => (
             <div key={item.label} className="rounded-lg bg-[var(--surface-elevated)]/70 px-3 py-2.5">
               <div className="typography-micro text-muted-foreground/70">{item.label}</div>

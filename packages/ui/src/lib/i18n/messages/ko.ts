@@ -1390,6 +1390,7 @@ export const dict: Record<I18nKey, string> = {
   'contextSidebar.stats.cost': '비용',
   'contextSidebar.stats.sessionCost': '세션 비용',
   'contextSidebar.stats.totalCost': '총 비용',
+  'contextSidebar.stats.revertedCost': '되돌린 비용',
   'contextUsage.tooltip.costPending': '아직 실행 중이거나 로딩 중인 하위 세션 포함',
   'contextSidebar.stats.tokensPerSecond': 'Tokens/s',
   'contextSidebar.stats.lastTokensPerSecond': '마지막 tok/s',

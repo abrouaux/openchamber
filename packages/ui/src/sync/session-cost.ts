@@ -36,6 +36,7 @@ import type { SessionContextUsage } from "@/stores/types/sessionTypes"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 import { isVSCodeRuntime } from "@/lib/desktop"
 import { isMobileSurfaceRuntime } from "@/lib/runtimeSurface"
+import { readRevertedCost as readPersistedRevertedCost } from "./reverted-cost-ledger"
 
 export interface SessionSubtreeCost {
     /** Cost of the root session's own assistant messages (loaded coverage). */
@@ -44,6 +45,8 @@ export interface SessionSubtreeCost {
     descendantCost: number
     /** sessionCost + descendantCost. */
     totalCost: number
+    /** Cost spent on the reverted branch, including its descendant sessions. */
+    revertedCost: number
     /** Whether the root session has any descendant sessions. */
     hasDescendants: boolean
     /**
@@ -82,6 +85,22 @@ const sumBucketCost = (messages: Message[]): number => {
     return total
 }
 
+const sumBucketCostBefore = (messages: Message[], messageID: string): number => {
+    let total = 0
+    for (const message of messages) {
+        if (message.id < messageID) total += sumBucketCost([message])
+    }
+    return total
+}
+
+const sumBucketCostFrom = (messages: Message[], messageID: string): number => {
+    let total = 0
+    for (const message of messages) {
+        if (message.id >= messageID) total += sumBucketCost([message])
+    }
+    return total
+}
+
 /**
  * Pure recursive aggregation. The root session is never pending by itself
  * (its own cost simply reflects loaded coverage); only descendants drive
@@ -89,8 +108,14 @@ const sumBucketCost = (messages: Message[]): number => {
  */
 export const computeSubtreeCost = (rootID: string, source: SubtreeCostSource): SessionSubtreeCost => {
     const ids = computeSubtreeIds(source.sessions, rootID)
+    const sessionsByID = new Map(source.sessions.map((session) => [session.id, session]))
+    const revertMessageID = sessionsByID.get(rootID)?.revert?.messageID
+    const revertMessageTime = revertMessageID
+        ? source.messages[rootID]?.find((message) => message.id === revertMessageID)?.time?.created
+        : undefined
     let sessionCost = 0
     let descendantCost = 0
+    let revertedCost = 0
     let pending = false
 
     for (const id of ids) {
@@ -109,13 +134,34 @@ export const computeSubtreeCost = (rootID: string, source: SubtreeCostSource): S
         }
 
         if (id === rootID) {
-            sessionCost = cost ?? 0
+            if (bucket && revertMessageID) {
+                sessionCost = sumBucketCostBefore(bucket, revertMessageID)
+                revertedCost += sumBucketCostFrom(bucket, revertMessageID)
+            } else {
+                sessionCost = cost ?? 0
+            }
             continue
         }
 
+        const session = sessionsByID.get(id)
+        const isRevertedDescendant = Boolean(
+            revertMessageID
+            && (
+                revertMessageTime === undefined
+                || session?.time?.created === undefined
+                || session.time.created >= revertMessageTime
+            ),
+        )
+
         if (typeof cost === "number") {
-            descendantCost += cost
+            if (isRevertedDescendant) {
+                // A revert removes the parent turn that spawned its task sessions.
+                revertedCost += cost
+            } else {
+                descendantCost += cost
+            }
         }
+        if (isRevertedDescendant) continue
         if (busy) {
             // A running subagent's total is still accumulating.
             pending = true
@@ -132,6 +178,7 @@ export const computeSubtreeCost = (rootID: string, source: SubtreeCostSource): S
         sessionCost,
         descendantCost,
         totalCost: sessionCost + descendantCost,
+        revertedCost,
         hasDescendants: ids.size > 1,
         pending,
     }
@@ -160,6 +207,7 @@ const writeFrozenCost = (directory: string, sessionID: string, cost: number): vo
     frozenCosts.set(key, cost)
     frozenVersion += 1
 }
+
 
 // ---------------------------------------------------------------------------
 // Lazy history loading for descendants
@@ -218,6 +266,7 @@ const ZERO_SUBTREE_COST: SessionSubtreeCost = {
     sessionCost: 0,
     descendantCost: 0,
     totalCost: 0,
+    revertedCost: 0,
     hasDescendants: false,
     pending: false,
 }
@@ -235,6 +284,7 @@ const isSameSubtreeCost = (a: SessionSubtreeCost, b: SessionSubtreeCost): boolea
     a.sessionCost === b.sessionCost
     && a.descendantCost === b.descendantCost
     && a.totalCost === b.totalCost
+    && a.revertedCost === b.revertedCost
     && a.hasDescendants === b.hasDescendants
     && a.pending === b.pending
 
@@ -314,6 +364,7 @@ export const useSessionSubtreeCost = (sessionID: string | null, directory?: stri
             readFrozenCost: (id) => readFrozenCost(resolvedDirectory, id),
             writeFrozenCost: (id, cost) => writeFrozenCost(resolvedDirectory, id, cost),
         })
+        computed.revertedCost += readPersistedRevertedCost(resolvedDirectory, sessionID)
         // Structural sharing: streaming updates that leave the figures
         // unchanged must not re-render consumers.
         const result = cache && isSameSubtreeCost(cache.result, computed) ? cache.result : computed
@@ -335,7 +386,8 @@ export const useSessionSubtreeCost = (sessionID: string | null, directory?: stri
 /**
  * Merge subtree cost into a session-scoped context usage object:
  * `cost` becomes the recursive total (the primary figure shown in the UI),
- * `sessionCost` keeps the current-session-only value for the breakdown.
+ * `sessionCost` keeps the current-session-only value for the breakdown, and
+ * `revertedCost` retains spending from discarded branches.
  */
 export const withSubtreeCost = (
     usage: SessionContextUsage | null,
@@ -345,7 +397,8 @@ export const withSubtreeCost = (
     return {
         ...usage,
         sessionCost: subtree.sessionCost > 0 ? subtree.sessionCost : undefined,
-        cost: subtree.totalCost > 0 ? subtree.totalCost : undefined,
+        revertedCost: subtree.revertedCost > 0 ? subtree.revertedCost : undefined,
+        cost: subtree.totalCost + subtree.revertedCost > 0 ? subtree.totalCost + subtree.revertedCost : undefined,
         costPending: subtree.pending || undefined,
     }
 }

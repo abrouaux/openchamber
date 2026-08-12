@@ -1384,6 +1384,7 @@ export const dict: Record<I18nKey, string> = {
   'contextSidebar.stats.cost': 'コスト',
   'contextSidebar.stats.sessionCost': 'セッションコスト',
   'contextSidebar.stats.totalCost': '合計コスト',
+  'contextSidebar.stats.revertedCost': '取り消したコスト',
   'contextUsage.tooltip.costPending': '実行中または読み込み中のサブセッションを含みます',
   'contextSidebar.stats.tokensPerSecond': 'Tokens/s',
   'contextSidebar.stats.lastTokensPerSecond': '最後の tok/s',

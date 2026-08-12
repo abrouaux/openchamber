@@ -783,7 +783,8 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
           && prev.thresholdLimit === contextUsageWithSubtree.thresholdLimit
           && prev.lastMessageId === contextUsageWithSubtree.lastMessageId
           && (prev.cost ?? 0) === (contextUsageWithSubtree.cost ?? 0)
-          && (prev.sessionCost ?? 0) === (contextUsageWithSubtree.sessionCost ?? 0)
+           && (prev.sessionCost ?? 0) === (contextUsageWithSubtree.sessionCost ?? 0)
+           && (prev.revertedCost ?? 0) === (contextUsageWithSubtree.revertedCost ?? 0)
           && (prev.costPending ?? false) === (contextUsageWithSubtree.costPending ?? false)
           && (prev.totalMessages ?? 0) === (contextUsageWithSubtree.totalMessages ?? 0)
           && (prev.userMessages ?? 0) === (contextUsageWithSubtree.userMessages ?? 0)
@@ -1047,7 +1048,8 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
           contextLimit={stableContextUsage.contextLimit}
           outputLimit={stableContextUsage.outputLimit ?? 0}
           cost={stableContextUsage.cost}
-          sessionCost={stableContextUsage.sessionCost}
+           sessionCost={stableContextUsage.sessionCost}
+           revertedCost={stableContextUsage.revertedCost}
           costPending={stableContextUsage.costPending}
           totalMessages={stableContextUsage.totalMessages}
           userMessages={stableContextUsage.userMessages}

@@ -1208,6 +1208,7 @@ export const dict = {
   'contextSidebar.stats.cost': 'Coût',
   'contextSidebar.stats.sessionCost': 'Coût de session',
   'contextSidebar.stats.totalCost': 'Coût total',
+  'contextSidebar.stats.revertedCost': 'Coût reverté',
   'contextUsage.tooltip.costPending': 'Inclut des sous-sessions encore en cours d’exécution ou de chargement',
   'contextSidebar.stats.tokensPerSecond': 'Tokens/s',
   'contextSidebar.stats.lastTokensPerSecond': 'Dernier tok/s',
