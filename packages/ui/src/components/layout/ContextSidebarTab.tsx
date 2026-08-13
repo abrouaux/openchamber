@@ -7,9 +7,9 @@ import { Icon } from "@/components/icon/Icon";
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useSessionSubtreeCost } from '@/sync/session-cost';
 import { computeCacheHitRate, computeSessionTokenRate } from '@/stores/utils/tokenUtils';
 import { useSessions, useSessionMessageRecords } from '@/sync/sync-context';
-import { useSessionSubtreeCost } from '@/sync/session-cost';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import {
@@ -343,10 +343,7 @@ export const ContextPanelContent: React.FC = () => {
       cache: { read: tokenBreakdown.cacheRead, write: tokenBreakdown.cacheWrite },
     });
 
-    const totalAssistantCost = assistantMessages.reduce((sum, message) => {
-      const cost = toNonNegativeNumber((message.info as { cost?: unknown }).cost);
-      return sum + cost;
-    }, 0);
+    const cost = toNonNegativeNumber((currentSession as { cost?: unknown } | null)?.cost);
 
     const lastAssistantCost = contextMessage
       ? toNonNegativeNumber((contextMessage.info as { cost?: unknown }).cost)
@@ -401,7 +398,7 @@ export const ContextPanelContent: React.FC = () => {
       tokenBreakdown,
       usagePercent,
       cacheHitRate,
-      totalAssistantCost,
+      cost,
       lastAssistantCost,
       tokensPerSecond: avgTokensPerSecond > 0 ? avgTokensPerSecond : undefined,
       lastTokensPerSecond: lastTokensPerSecond > 0 ? lastTokensPerSecond : undefined,
@@ -424,8 +421,8 @@ export const ContextPanelContent: React.FC = () => {
     );
   }
 
-  const subtreeTotalCost = subtreeCost ? subtreeCost.totalCost + subtreeCost.revertedCost : viewModel.totalAssistantCost;
-  const costPendingMark = subtreeCost?.pending ? '…' : '';
+  const sessionCost = subtreeCost?.sessionCost ?? viewModel.cost;
+  const totalCost = subtreeCost?.totalCost ?? viewModel.cost;
 
   const segments: Array<{ key: string; label: string; value: number; color: string }> = [
     { key: 'user', label: t('contextSidebar.breakdown.user'), value: viewModel.breakdown.user, color: 'var(--status-success)' },
@@ -484,9 +481,8 @@ export const ContextPanelContent: React.FC = () => {
             { label: t('contextSidebar.stats.user'), value: formatNumber(viewModel.userMessagesCount) },
             { label: t('contextSidebar.stats.assistant'), value: formatNumber(viewModel.assistantMessagesCount) },
             { label: t('contextSidebar.stats.tokensPerSecond'), value: viewModel.tokensPerSecond != null ? `${viewModel.tokensPerSecond.toFixed(1)} tok/s` : '—' },
-            { label: t('contextSidebar.stats.sessionCost'), value: formatMoney(viewModel.totalAssistantCost) },
-            { label: t('contextSidebar.stats.totalCost'), value: `${formatMoney(subtreeTotalCost)}${costPendingMark}` },
-            { label: t('contextSidebar.stats.revertedCost'), value: formatMoney(subtreeCost?.revertedCost ?? 0) },
+            { label: t('contextSidebar.stats.sessionCost'), value: formatMoney(sessionCost) },
+            { label: t('contextSidebar.stats.totalCost'), value: formatMoney(totalCost) },
           ] as const).map((item) => (
             <div key={item.label} className="rounded-lg bg-[var(--surface-elevated)]/70 px-3 py-2.5">
               <div className="typography-micro text-muted-foreground/70">{item.label}</div>

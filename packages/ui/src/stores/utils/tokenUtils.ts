@@ -93,14 +93,12 @@ export const computeCacheHitRate = (breakdown: TokenBreakdown | null | undefined
     return { percent, hasInput: true };
 };
 
-export interface SessionCostAndCounts {
-    totalCost: number;
+interface SessionMessageCounts {
     userCount: number;
     assistantCount: number;
 }
 
-export const computeSessionCostAndCounts = (messages: Message[]): SessionCostAndCounts => {
-    let totalCost = 0;
+export const computeSessionMessageCounts = (messages: Message[]): SessionMessageCounts => {
     let userCount = 0;
     let assistantCount = 0;
 
@@ -129,13 +127,10 @@ export const computeSessionCostAndCounts = (messages: Message[]): SessionCostAnd
         const role = msg.clientRole || msg.role || 'assistant';
         if (role === 'assistant') {
             assistantCount++;
-            if (typeof msg.cost === 'number' && Number.isFinite(msg.cost) && msg.cost > 0) {
-                totalCost += msg.cost;
-            }
         }
     }
 
-    return { totalCost, userCount, assistantCount };
+    return { userCount, assistantCount };
 };
 
 export interface SessionTokenRate {

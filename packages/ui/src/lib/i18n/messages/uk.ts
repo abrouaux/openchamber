@@ -1354,8 +1354,6 @@ export const dict: Record<I18nKey, string> = {
   "contextSidebar.stats.cost": "Вартість",
   "contextSidebar.stats.sessionCost": "Вартість сесії",
   "contextSidebar.stats.totalCost": "Загальна вартість",
-  "contextSidebar.stats.revertedCost": "Вартість скасованого",
-  "contextUsage.tooltip.costPending": "Включає підсесії, які ще виконуються або завантажуються",
   "contextSidebar.stats.tokensPerSecond": "Tokens/s",
   "contextSidebar.stats.lastTokensPerSecond": "Останній tok/s",
   "contextSidebar.tokens.input": "Вхідні токени",

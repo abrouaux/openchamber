@@ -61,7 +61,7 @@ import {
 import type { UsageWindow } from '@/types';
 import type { GitHubAuthStatus } from '@/lib/api/types';
 import type { SessionContextUsage } from '@/stores/types/sessionTypes';
-import { useSessionSubtreeCost, withSubtreeCost } from '@/sync/session-cost';
+import { useSessionSubtreeCost } from '@/sync/session-cost';
 import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
 import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
 import { ProjectActionsButton } from '@/components/layout/ProjectActionsButton';
@@ -395,8 +395,6 @@ const isSameContextUsage = (
     && (a.lastMessageId ?? '') === (b.lastMessageId ?? '')
     && (a.cost ?? 0) === (b.cost ?? 0)
     && (a.sessionCost ?? 0) === (b.sessionCost ?? 0)
-    && (a.revertedCost ?? 0) === (b.revertedCost ?? 0)
-    && (a.costPending ?? false) === (b.costPending ?? false)
     && (a.totalMessages ?? 0) === (b.totalMessages ?? 0)
     && (a.userMessages ?? 0) === (b.userMessages ?? 0)
     && (a.assistantMessages ?? 0) === (b.assistantMessages ?? 0)
@@ -513,8 +511,9 @@ export const Header: React.FC<HeaderProps> = ({
   const getContextUsage = useSessionUIStore((state) => state.getContextUsage);
   const isNewSessionDraftOpen = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open));
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+  const currentSessionDirectory = useSessionUIStore((state) => state.currentSessionDirectory);
   const currentSessionMessagesResolved = useSessionMessagesResolved(currentSessionId ?? '');
-  const subtreeCost = useSessionSubtreeCost(currentSessionId ?? null);
+  const subtreeCost = useSessionSubtreeCost(currentSessionId ?? null, currentSessionDirectory ?? undefined);
   const currentSessionStatus = useGlobalSessionStatus(currentSessionId ?? '');
   const isCurrentSessionMovingToWorktree = useIsSessionWorktreeMovePending(currentSessionId ?? '');
   const currentGlobalSession = useGlobalSessionsStore(useShallow(React.useCallback(
@@ -627,7 +626,15 @@ export const Header: React.FC<HeaderProps> = ({
     : null;
   const contextLimit = (limit && typeof limit.context === 'number' ? limit.context : 0);
   const outputLimit = (limit && typeof limit.output === 'number' ? limit.output : 0);
-  const contextUsage = withSubtreeCost(getContextUsage(contextLimit, outputLimit), subtreeCost);
+  const contextUsage = React.useMemo(() => {
+    const usage = getContextUsage(contextLimit, outputLimit);
+    if (!usage) return null;
+    return {
+      ...usage,
+      cost: subtreeCost && subtreeCost.totalCost > 0 ? subtreeCost.totalCost : undefined,
+      sessionCost: subtreeCost && subtreeCost.sessionCost > 0 ? subtreeCost.sessionCost : undefined,
+    };
+  }, [contextLimit, getContextUsage, outputLimit, subtreeCost]);
   const [stableDesktopContextUsage, setStableDesktopContextUsage] = React.useState<SessionContextUsage | null>(null);
   const isContextUsageResolvedForSession = !currentSessionId || currentSessionMessagesResolved;
 
@@ -2115,8 +2122,6 @@ export const Header: React.FC<HeaderProps> = ({
               outputLimit={stableDesktopContextUsage.outputLimit ?? 0}
               cost={stableDesktopContextUsage.cost}
               sessionCost={stableDesktopContextUsage.sessionCost}
-              revertedCost={stableDesktopContextUsage.revertedCost}
-              costPending={stableDesktopContextUsage.costPending}
               totalMessages={stableDesktopContextUsage.totalMessages}
               userMessages={stableDesktopContextUsage.userMessages}
               assistantMessages={stableDesktopContextUsage.assistantMessages}

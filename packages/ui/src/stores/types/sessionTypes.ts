@@ -44,14 +44,10 @@ export interface SessionContextUsage {
     normalizedOutput?: number;
     thresholdLimit: number;
     lastMessageId?: string;
-    /** Total cost: current session + all descendant sessions (recursive). */
+    /** Authoritative cost: current session plus descendant sessions. */
     cost?: number;
-    /** Cost of the current session only (before subtree aggregation). */
+    /** Authoritative OpenCode cost for the current session only. */
     sessionCost?: number;
-    /** Cost spent on branches removed with revert. */
-    revertedCost?: number;
-    /** True while descendant coverage is incomplete or still accumulating. */
-    costPending?: boolean;
     totalMessages?: number;
     userMessages?: number;
     assistantMessages?: number;

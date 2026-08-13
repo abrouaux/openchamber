@@ -33,7 +33,6 @@ import { getRuntimeKey } from "@/lib/runtime-switch"
 import { isAmbiguousTransportFailure } from "@/lib/relay/transport-error"
 import { getStaleRunningToolMessageID } from "./materialization"
 import { normalizePath } from "@/lib/pathNormalization"
-import { commitRevertedCost, computeRevertedBranchCost, deleteRevertedCost } from "./reverted-cost-ledger"
 
 const MESSAGE_REFETCH_LIMIT = 100
 const SEND_CONFIRMATION_REFETCH_LIMIT = 30
@@ -910,7 +909,6 @@ function finalizeConfirmedSessionDeletion(
   if (ui.currentSessionId === sessionId) ui.setCurrentSession(null)
   cleanupSessionWorktreeMetadata(sessionId)
   if (sessionDirectory) {
-    deleteRevertedCost(sessionDirectory, sessionId, expectedRuntimeKey)
     cleanupPersistedSessionState({
       runtimeKey: expectedRuntimeKey,
       directory: sessionDirectory,
@@ -1316,14 +1314,6 @@ export async function optimisticSend(input: {
   const revertedParts = new Map(
     revertedMessages.map((message) => [message.id, stateBeforeSend.part[message.id] ?? []] as const),
   )
-  const revertedCost = revertMessageID
-    ? computeRevertedBranchCost({
-      rootID: input.sessionId,
-      sessions: stateBeforeSend.session,
-      messages: stateBeforeSend.message,
-      statuses: stateBeforeSend.session_status,
-    })
-    : 0
 
   if (revertMessageID) {
     const session = stateBeforeSend.session.map((candidate) => (
@@ -1397,9 +1387,6 @@ export async function optimisticSend(input: {
   try {
     assertRuntimeUnchanged()
     await input.send(messageID)
-    if (revertMessageID && targetDirectory) {
-      commitRevertedCost(targetDirectory, input.sessionId, revertedCost, input.runtimeKey ?? getRuntimeKey())
-    }
   } catch (error) {
     const status = getErrorStatus(error)
     const ambiguousFailure = isAmbiguousSendFailure(error)
@@ -1414,9 +1401,6 @@ export async function optimisticSend(input: {
         directory: targetDirectory,
         messageID,
       })
-      if (revertMessageID && targetDirectory) {
-        commitRevertedCost(targetDirectory, input.sessionId, revertedCost, input.runtimeKey ?? getRuntimeKey())
-      }
       return
     }
 

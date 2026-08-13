@@ -1354,8 +1354,6 @@ export const dict: Record<I18nKey, string> = {
   "contextSidebar.stats.cost": "Custo",
   "contextSidebar.stats.sessionCost": "Custo da sessão",
   "contextSidebar.stats.totalCost": "Custo total",
-  "contextSidebar.stats.revertedCost": "Custo revertido",
-  "contextUsage.tooltip.costPending": "Inclui sub-sessões ainda em execução ou em carregamento",
   "contextSidebar.stats.tokensPerSecond": "Tokens/s",
   "contextSidebar.stats.lastTokensPerSecond": "Último tok/s",
   "contextSidebar.tokens.input": "Entrada",

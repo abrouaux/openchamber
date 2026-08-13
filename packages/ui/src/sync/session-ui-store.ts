@@ -26,7 +26,7 @@ import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
 import { useCommandsStore } from "@/stores/useCommandsStore"
 import { useSkillsStore } from "@/stores/useSkillsStore"
 import { getDeferredSafeStorage } from "@/stores/utils/safeStorage"
-import { computeSessionCostAndCounts, computeSessionTokenRate } from "@/stores/utils/tokenUtils"
+import { computeSessionMessageCounts, computeSessionTokenRate } from "@/stores/utils/tokenUtils"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
 import { normalizePath } from "@/lib/pathNormalization"
 import { flattenAssistantTextParts } from "@/lib/messages/messageText"
@@ -1095,7 +1095,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
     if (!lastTokens) return null
 
-    const { totalCost, userCount, assistantCount } = computeSessionCostAndCounts(messages)
+    const { userCount, assistantCount } = computeSessionMessageCounts(messages)
     const { avgTokensPerSecond, lastTokensPerSecond } = computeSessionTokenRate(messages, getSyncParts)
 
     const totalTokens = lastTokens.input + lastTokens.output + lastTokens.reasoning + (lastTokens.cache?.read ?? 0) + (lastTokens.cache?.write ?? 0)
@@ -1111,7 +1111,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       normalizedOutput,
       thresholdLimit,
       lastMessageId,
-      cost: totalCost > 0 ? totalCost : undefined,
       totalMessages: messages.length,
       userMessages: userCount,
       assistantMessages: assistantCount,

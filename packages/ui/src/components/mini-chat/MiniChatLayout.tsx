@@ -18,8 +18,8 @@ import { useGitBranchLabel, useGitStore } from '@/stores/useGitStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { Icon } from "@/components/icon/Icon";
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import { computeSessionCostAndCounts, computeSessionTokenRate } from '@/stores/utils/tokenUtils';
-import { useSessionSubtreeCost, withSubtreeCost } from '@/sync/session-cost';
+import { computeSessionMessageCounts, computeSessionTokenRate } from '@/stores/utils/tokenUtils';
+import { useSessionSubtreeCost } from '@/sync/session-cost';
 import { getSyncParts } from '@/sync/sync-refs';
 import type { SessionContextUsage } from '@/stores/types/sessionTypes';
 
@@ -52,6 +52,7 @@ const normalizePath = (value: string | null | undefined): string => {
 const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
   const { t } = useI18n();
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+  const currentSessionDirectory = useSessionUIStore((state) => state.currentSessionDirectory);
   const draftOpen = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open));
   const draftProjectId = useSessionUIStore((state) => state.newSessionDraft?.selectedProjectId ?? null);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
@@ -61,7 +62,7 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
   const providers = useConfigStore((state) => state.providers);
   const sessions = useSessions();
   const currentSessionMessages = useSessionMessages(currentSessionId ?? '');
-  const subtreeCost = useSessionSubtreeCost(currentSessionId ?? null);
+  const subtreeCost = useSessionSubtreeCost(currentSessionId ?? null, currentSessionDirectory ?? undefined);
   const runtimeApis = useRuntimeAPIs();
   const ensureGitStatus = useGitStore((state) => state.ensureStatus);
   const worktreePath = useSessionUIStore((state) => currentSessionId ? state.worktreeMetadata.get(currentSessionId)?.path ?? '' : '');
@@ -187,7 +188,7 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
     const percentage = contextLimit > 0 ? Math.round((totalTokens / contextLimit) * 100) : 0;
     const normalizedOutput = outputLimit > 0 ? Math.round((lastTokens.output / outputLimit) * 100) : undefined;
 
-    const { totalCost, userCount, assistantCount } = computeSessionCostAndCounts(currentSessionMessages);
+    const { userCount, assistantCount } = computeSessionMessageCounts(currentSessionMessages);
     const { avgTokensPerSecond, lastTokensPerSecond } = computeSessionTokenRate(currentSessionMessages, getSyncParts);
 
     return {
@@ -198,7 +199,6 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
       normalizedOutput,
       thresholdLimit,
       lastMessageId,
-      cost: totalCost > 0 ? totalCost : undefined,
       totalMessages: currentSessionMessages.length,
       userMessages: userCount,
       assistantMessages: assistantCount,
@@ -206,10 +206,15 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
       lastTokensPerSecond: lastTokensPerSecond > 0 ? lastTokensPerSecond : undefined,
     };
   }, [contextLimit, currentSessionId, currentSessionMessages, outputLimit]);
-  const contextUsageWithSubtree = React.useMemo(
-    () => withSubtreeCost(contextUsage, subtreeCost),
-    [contextUsage, subtreeCost],
-  );
+  const contextUsageWithSubtree = React.useMemo(() => (
+    contextUsage
+      ? {
+        ...contextUsage,
+        cost: subtreeCost && subtreeCost.totalCost > 0 ? subtreeCost.totalCost : undefined,
+        sessionCost: subtreeCost && subtreeCost.sessionCost > 0 ? subtreeCost.sessionCost : undefined,
+      }
+      : null
+  ), [contextUsage, subtreeCost]);
   const [stableContextUsage, setStableContextUsage] = React.useState<SessionContextUsage | null>(null);
   const dragRegionStyle = { WebkitAppRegion: 'drag' } as React.CSSProperties;
   const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
@@ -231,10 +236,8 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
           && (prev.normalizedOutput ?? 0) === (contextUsageWithSubtree.normalizedOutput ?? 0)
           && prev.thresholdLimit === contextUsageWithSubtree.thresholdLimit
           && prev.lastMessageId === contextUsageWithSubtree.lastMessageId
-          && (prev.cost ?? 0) === (contextUsageWithSubtree.cost ?? 0)
-           && (prev.sessionCost ?? 0) === (contextUsageWithSubtree.sessionCost ?? 0)
-           && (prev.revertedCost ?? 0) === (contextUsageWithSubtree.revertedCost ?? 0)
-          && (prev.costPending ?? false) === (contextUsageWithSubtree.costPending ?? false)
+            && (prev.cost ?? 0) === (contextUsageWithSubtree.cost ?? 0)
+            && (prev.sessionCost ?? 0) === (contextUsageWithSubtree.sessionCost ?? 0)
           && (prev.totalMessages ?? 0) === (contextUsageWithSubtree.totalMessages ?? 0)
           && (prev.userMessages ?? 0) === (contextUsageWithSubtree.userMessages ?? 0)
           && (prev.assistantMessages ?? 0) === (contextUsageWithSubtree.assistantMessages ?? 0)
@@ -317,10 +320,8 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
           colorPercentage={stableContextUsage.percentage}
           contextLimit={stableContextUsage.contextLimit}
           outputLimit={stableContextUsage.outputLimit ?? 0}
-          cost={stableContextUsage.cost}
-           sessionCost={stableContextUsage.sessionCost}
-           revertedCost={stableContextUsage.revertedCost}
-          costPending={stableContextUsage.costPending}
+           cost={stableContextUsage.cost}
+            sessionCost={stableContextUsage.sessionCost}
           totalMessages={stableContextUsage.totalMessages}
           userMessages={stableContextUsage.userMessages}
           assistantMessages={stableContextUsage.assistantMessages}
