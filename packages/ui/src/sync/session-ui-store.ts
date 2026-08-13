@@ -1096,7 +1096,11 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     if (!lastTokens) return null
 
     const { userCount, assistantCount } = computeSessionMessageCounts(messages)
-    const { avgTokensPerSecond, lastTokensPerSecond } = computeSessionTokenRate(messages, getSyncParts)
+    const currentSessionDirectory = get().currentSessionDirectory
+    const { avgTokensPerSecond, lastTokensPerSecond } = computeSessionTokenRate(
+      messages,
+      (messageId) => getSyncParts(messageId, currentSessionDirectory ?? undefined),
+    )
 
     const totalTokens = lastTokens.input + lastTokens.output + lastTokens.reasoning + (lastTokens.cache?.read ?? 0) + (lastTokens.cache?.write ?? 0)
     const thresholdLimit = contextLimit > 0 ? contextLimit : 200000

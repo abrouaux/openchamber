@@ -21,6 +21,18 @@ describe("computeSubtreeCost", () => {
         expect(cost).toEqual({ sessionCost: 1, totalCost: 1.75 })
     })
 
+    test("includes every descendant branch once", () => {
+        const cost = computeSubtreeCost("root", [
+            session("root", 1),
+            session("left", 0.5, "root"),
+            session("left-leaf", 0.25, "left"),
+            session("right", 2, "root"),
+            session("right-leaf", 0.75, "right"),
+        ])
+
+        expect(cost).toEqual({ sessionCost: 1, totalCost: 4.5 })
+    })
+
     test("uses the persisted value unchanged for sessions with reverted work", () => {
         const cost = computeSubtreeCost("root", [
             { ...session("root", 1.5), revert: { messageID: "msg_2" } } as Session,

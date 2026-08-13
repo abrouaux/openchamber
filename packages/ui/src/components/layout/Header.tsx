@@ -626,15 +626,17 @@ export const Header: React.FC<HeaderProps> = ({
     : null;
   const contextLimit = (limit && typeof limit.context === 'number' ? limit.context : 0);
   const outputLimit = (limit && typeof limit.output === 'number' ? limit.output : 0);
-  const contextUsage = React.useMemo(() => {
-    const usage = getContextUsage(contextLimit, outputLimit);
-    if (!usage) return null;
-    return {
-      ...usage,
-      cost: subtreeCost && subtreeCost.totalCost > 0 ? subtreeCost.totalCost : undefined,
-      sessionCost: subtreeCost && subtreeCost.sessionCost > 0 ? subtreeCost.sessionCost : undefined,
-    };
-  }, [contextLimit, getContextUsage, outputLimit, subtreeCost]);
+  const usage = getContextUsage(contextLimit, outputLimit);
+  const nextContextUsage = usage ? {
+    ...usage,
+    cost: subtreeCost && subtreeCost.totalCost > 0 ? subtreeCost.totalCost : undefined,
+    sessionCost: subtreeCost && subtreeCost.sessionCost > 0 ? subtreeCost.sessionCost : undefined,
+  } : null;
+  const contextUsageRef = React.useRef<SessionContextUsage | null>(null);
+  const contextUsage = isSameContextUsage(contextUsageRef.current, nextContextUsage)
+    ? contextUsageRef.current
+    : nextContextUsage;
+  contextUsageRef.current = contextUsage;
   const [stableDesktopContextUsage, setStableDesktopContextUsage] = React.useState<SessionContextUsage | null>(null);
   const isContextUsageResolvedForSession = !currentSessionId || currentSessionMessagesResolved;
 

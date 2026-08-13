@@ -741,7 +741,10 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
     const normalizedOutput = outputLimit > 0 ? Math.round((lastTokens.output / outputLimit) * 100) : undefined;
 
     const { userCount, assistantCount } = computeSessionMessageCounts(currentSessionMessages);
-    const { avgTokensPerSecond, lastTokensPerSecond } = computeSessionTokenRate(currentSessionMessages, getSyncParts);
+    const { avgTokensPerSecond, lastTokensPerSecond } = computeSessionTokenRate(
+      currentSessionMessages,
+      (messageId) => getSyncParts(messageId, currentSessionDirectory ?? undefined),
+    );
 
     return {
       totalTokens,
@@ -757,7 +760,7 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
       tokensPerSecond: avgTokensPerSecond > 0 ? avgTokensPerSecond : undefined,
       lastTokensPerSecond: lastTokensPerSecond > 0 ? lastTokensPerSecond : undefined,
     };
-  }, [contextLimit, currentSessionId, currentSessionMessages, headerMessageSummary.lastMessageId, headerMessageSummary.lastTokens, outputLimit]);
+  }, [contextLimit, currentSessionDirectory, currentSessionId, currentSessionMessages, headerMessageSummary.lastMessageId, headerMessageSummary.lastTokens, outputLimit]);
   const contextUsageWithSubtree = React.useMemo(() => (
     contextUsage
       ? {

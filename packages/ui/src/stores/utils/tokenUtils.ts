@@ -105,7 +105,6 @@ export const computeSessionMessageCounts = (messages: Message[]): SessionMessage
     for (let i = 0; i < messages.length; i++) {
         const msg = messages[i] as Message & {
             role?: string;
-            cost?: number;
             clientRole?: string;
             userMessageMarker?: boolean;
             origin?: string;
@@ -187,7 +186,9 @@ export const computeSessionTokenRate = (
                         typeof toolTime.end === 'number' &&
                         toolTime.end > toolTime.start
                     ) {
-                        intervals.push([toolTime.start, toolTime.end]);
+                        const start = Math.max(toolTime.start, created);
+                        const end = Math.min(toolTime.end, completed);
+                        if (end > start) intervals.push([start, end]);
                     }
                 }
                 if (intervals.length > 0) {

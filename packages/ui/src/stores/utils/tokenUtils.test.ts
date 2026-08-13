@@ -74,4 +74,37 @@ describe('computeSessionTokenRate', () => {
 
     expect(result).toEqual({ avgTokensPerSecond: 15, lastTokensPerSecond: 15 });
   });
+
+  test('aggregates completed assistant turns and reports the last rate', () => {
+    const result = computeSessionTokenRate([
+      { role: 'assistant', id: 'first', tokens: { output: 20 }, time: { created: 0, completed: 2000 } },
+      { role: 'user', id: 'user', tokens: { output: 100 }, time: { created: 2000, completed: 3000 } },
+      { role: 'assistant', id: 'last', tokens: { output: 60 }, time: { created: 3000, completed: 6000 } },
+    ] as Message[]);
+
+    expect(result).toEqual({ avgTokensPerSecond: 16, lastTokensPerSecond: 20 });
+  });
+
+  test('subtracts only the merged tool time within a message', () => {
+    const result = computeSessionTokenRate(
+      [{ role: 'assistant', id: 'assistant', tokens: { output: 30 }, time: { created: 0, completed: 10000 } }] as Message[],
+      () => [
+        { type: 'tool', state: { time: { start: -2000, end: 3000 } } },
+        { type: 'tool', state: { time: { start: 2000, end: 5000 } } },
+        { type: 'tool', state: { time: { start: 8000, end: 12000 } } },
+      ],
+    );
+
+    expect(result).toEqual({ avgTokensPerSecond: 10, lastTokensPerSecond: 10 });
+  });
+
+  test('ignores assistant messages without a valid completed generation', () => {
+    const result = computeSessionTokenRate([
+      { role: 'assistant', id: 'missing-time', tokens: { output: 20 } },
+      { role: 'assistant', id: 'unfinished', tokens: { output: 20 }, time: { created: 0, completed: 0 } },
+      { role: 'assistant', id: 'no-output', tokens: { output: 0 }, time: { created: 0, completed: 1000 } },
+    ] as Message[]);
+
+    expect(result).toEqual({ avgTokensPerSecond: 0, lastTokensPerSecond: 0 });
+  });
 });

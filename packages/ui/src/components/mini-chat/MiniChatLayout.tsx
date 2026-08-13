@@ -189,7 +189,10 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
     const normalizedOutput = outputLimit > 0 ? Math.round((lastTokens.output / outputLimit) * 100) : undefined;
 
     const { userCount, assistantCount } = computeSessionMessageCounts(currentSessionMessages);
-    const { avgTokensPerSecond, lastTokensPerSecond } = computeSessionTokenRate(currentSessionMessages, getSyncParts);
+    const { avgTokensPerSecond, lastTokensPerSecond } = computeSessionTokenRate(
+      currentSessionMessages,
+      (messageId) => getSyncParts(messageId, currentSessionDirectory ?? undefined),
+    );
 
     return {
       totalTokens,
@@ -205,7 +208,7 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
       tokensPerSecond: avgTokensPerSecond > 0 ? avgTokensPerSecond : undefined,
       lastTokensPerSecond: lastTokensPerSecond > 0 ? lastTokensPerSecond : undefined,
     };
-  }, [contextLimit, currentSessionId, currentSessionMessages, outputLimit]);
+  }, [contextLimit, currentSessionDirectory, currentSessionId, currentSessionMessages, outputLimit]);
   const contextUsageWithSubtree = React.useMemo(() => (
     contextUsage
       ? {
