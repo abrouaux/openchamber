@@ -80,7 +80,7 @@ export const UsagePage: React.FC = () => {
     ? selectedResult.error
     : null;
   const showInDropdown = selectedProviderId ? dropdownProviderIds.includes(selectedProviderId) : false;
-  const hasCredentialsForm = selectedProviderId === 'opencode-go' || selectedProviderId === 'ollama-cloud' || selectedProviderId === 'cursor';
+  const hasCredentialsForm = selectedProviderId === 'ollama-cloud' || selectedProviderId === 'cursor';
   const handleDropdownToggle = React.useCallback((enabled: boolean) => {
     if (!selectedProviderId) {
       return;
@@ -162,6 +162,11 @@ export const UsagePage: React.FC = () => {
       description={
         isLoading ? (
           <span className="animate-pulse typography-settings-description text-muted-foreground">{t('settings.usage.page.header.refreshing')}</span>
+        ) : selectedResult?.planLabel ? (
+          t('settings.usage.page.header.lastUpdatedWithPlan', {
+            plan: selectedResult.planLabel,
+            time: formatTime(lastUpdated, timeFormatPreference),
+          })
         ) : (
           t('settings.usage.page.header.lastUpdated', { time: formatTime(lastUpdated, timeFormatPreference) })
         )
@@ -199,7 +204,7 @@ export const UsagePage: React.FC = () => {
         </div>
       )}
 
-      {(selectedProviderId === 'opencode-go' || selectedProviderId === 'ollama-cloud' || selectedProviderId === 'cursor') && (
+      {(selectedProviderId === 'ollama-cloud' || selectedProviderId === 'cursor') && (
         <QuotaCredentials providerId={selectedProviderId} providerName={providerName} />
       )}
 
