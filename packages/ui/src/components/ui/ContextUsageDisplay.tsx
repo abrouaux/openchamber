@@ -3,7 +3,8 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { Icon } from "@/components/icon/Icon";
-import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
+import { formatMoney } from '@/lib/money';
 import { clampPercent, resolveUsageTone } from '@/lib/quota';
 
 interface ContextUsageDisplayProps {
@@ -13,7 +14,7 @@ interface ContextUsageDisplayProps {
   contextLimit: number;
   outputLimit?: number;
   /** Authoritative cost: current session plus descendant sessions. */
-  cost?: number;
+  cost?: number | null;
   /** Authoritative OpenCode cost for the current session only. */
   sessionCost?: number;
   totalMessages?: number;
@@ -42,7 +43,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   colorPercentage,
   contextLimit,
   outputLimit,
-  cost,
+  cost = null,
   sessionCost,
   totalMessages,
   userMessages,
@@ -80,17 +81,6 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
     return tokens.toFixed(1).replace(/\.0$/, '');
   };
 
-  const formatCost = (value: number): string => {
-    const locale = getCurrentIntlLocale();
-    const fractionDigits = value > 0 && value < 0.01 ? 4 : 2;
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: fractionDigits,
-      maximumFractionDigits: fractionDigits,
-    }).format(value);
-  };
-
   const showCost = typeof cost === 'number' && Number.isFinite(cost) && cost > 0;
   const showSessionCost = typeof sessionCost === 'number' && Number.isFinite(sessionCost) && sessionCost > 0;
   const showCostBreakdown = showCost && showSessionCost && Math.abs(cost! - sessionCost!) > 1e-9;
@@ -111,6 +101,8 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
 
   const safeOutputLimit = typeof outputLimit === 'number' ? Math.max(outputLimit, 0) : 0;
   const hasStats = showCost || typeof totalMessages === 'number' || showTokensPerSecond || showLastTokensPerSecond;
+  const normalizedCost = cost ?? 0;
+  const hasCost = normalizedCost > 0 && Number.isFinite(normalizedCost);
   const tooltipLines = [
     t('contextUsage.tooltip.usedTokens', { tokens: formatTokens(totalTokens) }),
     t('contextUsage.tooltip.contextLimit', { tokens: formatTokens(contextLimit) }),
@@ -118,10 +110,10 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
     ...(hasStats ? ['---'] : []),
     ...(showCostBreakdown
       ? [
-        t('contextSidebar.stats.sessionCost') + ': ' + formatCost(sessionCost!),
-        t('contextSidebar.stats.totalCost') + ': ' + formatCost(cost!),
+        t('contextSidebar.stats.sessionCost') + ': ' + formatMoney(sessionCost!),
+        t('contextSidebar.stats.totalCost') + ': ' + formatMoney(cost!),
       ]
-      : showCost ? [t('contextSidebar.stats.cost') + ': ' + formatCost(cost!)] : []),
+      : showCost ? [t('contextSidebar.stats.cost') + ': ' + formatMoney(cost!)] : []),
     ...(typeof totalMessages === 'number' ? [t('contextSidebar.stats.messages') + ': ' + formatNumber(totalMessages)] : []),
     ...(typeof userMessages === 'number' ? [t('contextSidebar.stats.user') + ': ' + formatNumber(userMessages)] : []),
     ...(typeof assistantMessages === 'number' ? [t('contextSidebar.stats.assistant') + ': ' + formatNumber(assistantMessages)] : []),
@@ -132,7 +124,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   const isInteractive = !isMobile && typeof onClick === 'function';
 
   const costSuffix = showCost ? (
-    <span className="text-muted-foreground/60">{`・ ${formatCost(cost!)}`}</span>
+    <span className="text-muted-foreground/60">{`・ ${formatMoney(cost!)}`}</span>
   ) : null;
 
   const contextContent = (
@@ -238,6 +230,12 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
                 <span className="typography-meta text-muted-foreground">{t('contextUsage.mobile.outputLimit')}</span>
                 <span className="typography-meta text-foreground font-medium">{formatTokens(safeOutputLimit)}</span>
               </div>
+              {hasCost ? (
+                <div className="flex justify-between items-center">
+                  <span className="typography-meta text-muted-foreground">{t('contextUsage.mobile.cost')}</span>
+                  <span className="typography-meta text-foreground font-medium">{formatMoney(normalizedCost)}</span>
+                </div>
+              ) : null}
               <div className="flex justify-between items-center pt-1 border-t border-border/40">
                 <span className="typography-meta text-muted-foreground">{t('contextUsage.mobile.usage')}</span>
                 <span className={cn('typography-meta font-semibold', getPercentageColor(colorPct))}>
@@ -250,7 +248,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
                 {showCostBreakdown && (
                   <div className="flex justify-between items-center">
                     <span className="typography-meta text-muted-foreground">{t('contextSidebar.stats.sessionCost')}</span>
-                    <span className="typography-meta text-foreground font-medium">{formatCost(sessionCost!)}</span>
+                    <span className="typography-meta text-foreground font-medium">{formatMoney(sessionCost!)}</span>
                   </div>
                 )}
                 {showCost && (
@@ -258,7 +256,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
                     <span className="typography-meta text-muted-foreground">
                       {showCostBreakdown ? t('contextSidebar.stats.totalCost') : t('contextSidebar.stats.cost')}
                     </span>
-                    <span className="typography-meta text-foreground font-medium">{formatCost(cost!)}</span>
+                    <span className="typography-meta text-foreground font-medium">{formatMoney(cost!)}</span>
                   </div>
                 )}
                 {typeof totalMessages === 'number' && (

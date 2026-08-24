@@ -3,7 +3,7 @@ import { useI18n } from '@/lib/i18n';
 import { useGitStore } from '@/stores/useGitStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { runBackgroundNetworkTask } from '@/lib/background-network';
-import { getGitHubPrStatusKey, usePrVisualSummary } from '@/stores/useGitHubPrStatusStore';
+import { useFreshestPrVisualSummaryForBranch } from '@/stores/useGitHubPrStatusStore';
 import { useSessionMessages } from '@/sync/sync-context';
 import { useSessionSubtreeCost } from '@/sync/session-cost';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -14,6 +14,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { resolveUsageTone } from '@/lib/quota';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { normalizePath } from '@/lib/pathNormalization';
+import { formatMoney } from '@/lib/money';
 import { computeContextUsage } from './contextUsage';
 import {
   WorkStatusCallout,
@@ -34,11 +35,6 @@ type Props = {
   showRepository: boolean;
 };
 
-// Spend is read against a budget, so it keeps its real precision instead of
-// collapsing to two decimals. Trailing zeros are dropped so exact values stay
-// short.
-const trimZeros = (value: string): string => (value.includes('.') ? value.replace(/0+$/, '').replace(/\.$/, '') : value);
-const formatCost = (cost: number): string => `$${trimZeros(cost.toFixed(4))}`;
 // Matches the header readout exactly: one decimal, capped the same way, so the
 // two places that report context fill never disagree by a rounding step.
 const formatPercent = (percent: number): string => `${Math.min(percent, 999).toFixed(1)}%`;
@@ -108,11 +104,7 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
   // Read-only: PR watching is owned by the background tracker. Starting a watch
   // here would multiply GitHub requests per open session, which is exactly the
   // fan-out the PR-status concurrency gate exists to prevent.
-  const prKey = React.useMemo(
-    () => (directory && branch ? getGitHubPrStatusKey(directory, branch) : null),
-    [directory, branch],
-  );
-  const prSummary = usePrVisualSummary(prKey);
+  const prSummary = useFreshestPrVisualSummaryForBranch(directory, branch);
 
   // `getCurrentModel` is an imperative getter: its reference never changes, so
   // calling it in render subscribes to nothing. Subscribe to the selected model
@@ -224,7 +216,7 @@ export const WorkStatusPrimaryGroup: React.FC<Props> = ({ sessionId, directory, 
                     <WorkStatusValue>{formatPercent(usagePercent)}</WorkStatusValue>
                     {/* No icon of its own: the sprite has no currency glyph, and
                         spend belongs with consumption anyway. The `$` labels it. */}
-                    {cost !== null ? <WorkStatusValue tone="muted">{`・ ${formatCost(cost)}`}</WorkStatusValue> : null}
+                    {cost !== null ? <WorkStatusValue tone="muted">{`・ ${formatMoney(cost)}`}</WorkStatusValue> : null}
                   </>
                 )}
               />
