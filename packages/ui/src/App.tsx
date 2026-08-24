@@ -14,6 +14,7 @@ import { useTraySync } from '@/hooks/useTraySync';
 import { useRouter } from '@/hooks/useRouter';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { useWebNotificationStream } from '@/hooks/useWebNotificationStream';
+import { useAgentMemorySync } from '@/hooks/useAgentMemorySync';
 import { usePwaInstallPrompt } from '@/hooks/usePwaInstallPrompt';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -32,7 +33,6 @@ import type { RecoveryVariant } from '@/components/onboarding/DesktopConnectionR
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { markSessionViewed } from '@/sync/notification-store';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useProjectsStore } from '@/stores/useProjectsStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
@@ -638,12 +638,9 @@ function App({ apis }: AppProps) {
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     const onOpenMiniChat = () => {
-      const currentDir = useDirectoryStore.getState().currentDirectory;
-      const { activeProjectId, projects } = useProjectsStore.getState();
-      const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
       void invokeDesktop('desktop_open_draft_mini_chat_window', {
-        directory: currentDir || activeProject?.path || '',
-        projectId: activeProject?.id ?? null,
+        directory: '',
+        projectId: null,
       });
     };
     window.addEventListener('openchamber:open-mini-chat', onOpenMiniChat);
@@ -675,11 +672,13 @@ function App({ apis }: AppProps) {
       const projectId = typeof detail?.projectId === 'string' && detail.projectId.trim().length > 0
         ? detail.projectId.trim()
         : null;
+      const hasProjectTarget = Boolean(directory || projectId);
       useUIStore.getState().setActiveMainTab('chat');
       useUIStore.getState().setSessionSwitcherOpen(false);
       useSessionUIStore.getState().openNewSessionDraft({
-        selectedProjectId: projectId,
-        directoryOverride: directory,
+        target: hasProjectTarget ? 'project' : 'chat',
+        selectedProjectId: hasProjectTarget ? projectId : null,
+        directoryOverride: hasProjectTarget ? directory : null,
         preserveDirectoryOverride: Boolean(directory),
       });
     };
@@ -703,6 +702,10 @@ function App({ apis }: AppProps) {
 
   usePushVisibilityBeacon({ enabled: embeddedBackgroundWorkEnabled });
   useWebNotificationStream({ enabled: embeddedBackgroundWorkEnabled });
+  // Loaded here rather than by the Memory tab: the session index is built from
+  // this snapshot, so leaving it to the panel meant a user who never opened
+  // Project notes sent every message with no memory index at all.
+  useAgentMemorySync(currentDirectory || null);
   usePwaInstallPrompt();
 
   useWindowTitle();

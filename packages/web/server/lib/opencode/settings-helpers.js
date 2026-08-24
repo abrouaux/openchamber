@@ -1,3 +1,5 @@
+import { isAgentMemoryFeatureAvailable } from '../agent-memory/feature-flag.js';
+
 export const createSettingsHelpers = (dependencies) => {
   const {
     normalizePathForPersistence,
@@ -28,6 +30,9 @@ export const createSettingsHelpers = (dependencies) => {
   const MOBILE_KEYBOARD_MODE_VALUES = new Set(['native', 'resize-content']);
   const REASONING_MODE_VALUES = new Set(['off', 'collapsible-hidden', 'collapsible-dynamic', 'full']);
   const TERMINAL_SHELL_VALUES = new Set(['auto', 'bash', 'zsh', 'sh', 'fish', 'pwsh', 'powershell', 'cmd', 'dash', 'ksh', 'nu']);
+  const SIDEBAR_PROJECT_DISPLAY_MODE_VALUES = new Set(['all', 'single']);
+  const SIDEBAR_SESSION_GROUPING_MODE_VALUES = new Set(['by-worktree', 'flat']);
+  const SIDEBAR_PROJECT_SORT_ORDER_VALUES = new Set(['manual', 'a-z', 'z-a', 'date-added', 'recent']);
 
   /**
    * Resolve a reasoningMode enum from a candidate settings object, accepting
@@ -267,6 +272,18 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.activeProjectId === 'string' && candidate.activeProjectId.length > 0) {
       result.activeProjectId = candidate.activeProjectId;
+    }
+    if (SIDEBAR_PROJECT_DISPLAY_MODE_VALUES.has(candidate.sidebarProjectDisplayMode)) {
+      result.sidebarProjectDisplayMode = candidate.sidebarProjectDisplayMode;
+    }
+    if (SIDEBAR_SESSION_GROUPING_MODE_VALUES.has(candidate.sidebarSessionGroupingMode)) {
+      result.sidebarSessionGroupingMode = candidate.sidebarSessionGroupingMode;
+    }
+    if (SIDEBAR_PROJECT_SORT_ORDER_VALUES.has(candidate.sidebarProjectSortOrder)) {
+      result.sidebarProjectSortOrder = candidate.sidebarProjectSortOrder;
+    }
+    if (typeof candidate.sidebarShowRecentSection === 'boolean') {
+      result.sidebarShowRecentSection = candidate.sidebarShowRecentSection;
     }
 
     if (Array.isArray(candidate.securityScopedBookmarks)) {
@@ -535,6 +552,9 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.agentControlToolEnabled === 'boolean') {
       result.agentControlToolEnabled = candidate.agentControlToolEnabled;
+    }
+    if (typeof candidate.agentMemoryToolEnabled === 'boolean') {
+      result.agentMemoryToolEnabled = candidate.agentMemoryToolEnabled;
     }
     if (typeof candidate.optimizeSystemPrompt === 'boolean') {
       result.optimizeSystemPrompt = candidate.optimizeSystemPrompt;
@@ -933,6 +953,9 @@ export const createSettingsHelpers = (dependencies) => {
     return {
       ...sanitized,
       hasManagedRemoteTunnelToken,
+      // Tells the client whether agent memory exists in this build at all, so
+      // its settings row and panel tab can be absent rather than merely off.
+      agentMemoryFeatureAvailable: isAgentMemoryFeatureAvailable(),
       ...(pwaAppName ? { pwaAppName } : {}),
       pwaOrientation,
       mobileKeyboardMode,

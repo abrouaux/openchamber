@@ -65,6 +65,10 @@ export type DesktopSettings = {
   desktopUiPassword?: string;
   projects?: ProjectEntry[];
   activeProjectId?: string;
+  sidebarProjectDisplayMode?: 'all' | 'single';
+  sidebarSessionGroupingMode?: 'by-worktree' | 'flat';
+  sidebarProjectSortOrder?: 'manual' | 'a-z' | 'z-a' | 'date-added' | 'recent';
+  sidebarShowRecentSection?: boolean;
   securityScopedBookmarks?: string[];
   pinnedDirectories?: string[];
   reasoningMode?: ReasoningMode;
@@ -158,6 +162,8 @@ export type DesktopSettings = {
   showOpenCodeUpdateNotifications?: boolean;
   agentControlToolEnabled?: boolean;
   agentWebToolEnabled?: boolean;
+  agentMemoryToolEnabled?: boolean;
+  agentMemoryFeatureAvailable?: boolean;
   optimizeSystemPrompt?: boolean;
   openCodeUpdateToastDismissedVersion?: string;
   showToolFileIcons?: boolean;
