@@ -1,6 +1,7 @@
 import React from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatView } from '@/components/views/ChatView';
+import { AppLinkConfirmDialog } from '@/components/chat/AppLinkConfirmDialog';
 import { FireworksProvider } from '@/contexts/FireworksContext';
 import { Toaster } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { useMenuActions } from '@/hooks/useMenuActions';
 import { useSessionStatusBootstrap } from '@/hooks/useSessionStatusBootstrap';
 import { useTraySync } from '@/hooks/useTraySync';
+import { useGlobalSessionsPolling } from '@/hooks/useGlobalSessionsPolling';
 import { useRouter } from '@/hooks/useRouter';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { useWebNotificationStream } from '@/hooks/useWebNotificationStream';
@@ -18,7 +20,6 @@ import { useAgentMemorySync } from '@/hooks/useAgentMemorySync';
 import { usePwaInstallPrompt } from '@/hooks/usePwaInstallPrompt';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { hasModifier } from '@/lib/utils';
 import { isDesktopLocalOriginActive, isDesktopShell, restartDesktopApp, invokeDesktop } from '@/lib/desktop';
 import {
   getInjectedBootOutcome,
@@ -624,7 +625,6 @@ function App({ apis }: AppProps) {
       const directory = typeof detail?.directory === 'string' && detail.directory.trim().length > 0
         ? detail.directory.trim()
         : null;
-      useUIStore.getState().setActiveMainTab('chat');
       void useSessionUIStore.getState().setCurrentSession(sessionId, directory);
     };
 
@@ -673,7 +673,6 @@ function App({ apis }: AppProps) {
         ? detail.projectId.trim()
         : null;
       const hasProjectTarget = Boolean(directory || projectId);
-      useUIStore.getState().setActiveMainTab('chat');
       useUIStore.getState().setSessionSwitcherOpen(false);
       useSessionUIStore.getState().openNewSessionDraft({
         target: hasProjectTarget ? 'project' : 'chat',
@@ -719,28 +718,16 @@ function App({ apis }: AppProps) {
   useMenuActions(handleToggleMemoryDebug);
 
   useTraySync();
+  useGlobalSessionsPolling(!embeddedSessionChat);
 
   useSessionStatusBootstrap({ enabled: embeddedBackgroundWorkEnabled });
 
+  // Palette-only action: the memory debug panel has no keyboard shortcut.
   React.useEffect(() => {
-    if (embeddedSessionChat) {
-      return;
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isDebugShortcut = hasModifier(e)
-        && e.shiftKey
-        && !e.altKey
-        && (e.code === 'KeyD' || e.key.toLowerCase() === 'd');
-
-      if (isDebugShortcut) {
-        e.preventDefault();
-        setShowMemoryDebug(prev => !prev);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
+    if (embeddedSessionChat) return;
+    const handleToggle = () => setShowMemoryDebug((previous) => !previous);
+    window.addEventListener('openchamber:memory-debug-toggle', handleToggle);
+    return () => window.removeEventListener('openchamber:memory-debug-toggle', handleToggle);
   }, [embeddedSessionChat]);
 
   React.useEffect(() => {
@@ -906,6 +893,7 @@ function App({ apis }: AppProps) {
                   isVSCodeRuntime={isVSCodeRuntime}
                   embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled}
                 />
+                <AppLinkConfirmDialog />
               </div>
             </TooltipProvider>
           </RuntimeAPIProvider>
@@ -949,6 +937,7 @@ function App({ apis }: AppProps) {
                   <OpenCodeUpdateToast />
                   <MainLayout />
                   <Toaster />
+                  <AppLinkConfirmDialog />
                   {!isBootShell && (
                     <>
                       <ConfigUpdateOverlay />

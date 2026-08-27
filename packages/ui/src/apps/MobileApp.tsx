@@ -9,8 +9,10 @@ import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 import { ChatView } from '@/components/views/ChatView';
 import { PlanView } from '@/components/views/PlanView';
 import { SettingsView } from '@/components/views/SettingsView';
+import { AppLinkConfirmDialog } from '@/components/chat/AppLinkConfirmDialog';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
+import { useAuthSessionStore } from '@/lib/runtime-auth-expiry';
 import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
@@ -771,6 +773,23 @@ export function MobileApp({ apis }: MobileAppProps) {
     };
   }, [isNativeMobileApp, handleNativeResume]);
 
+  // A confirmed mid-session auth expiry (classified centrally from live 401
+  // traffic) runs the same seq-guarded re-probe the resume path uses: it ends
+  // in needs-login → the native welcome screen with the auth-expired notice.
+  // The shared web banner never renders on native (the session gate is not
+  // mounted here), so this is the only surface reacting to the signal.
+  React.useEffect(() => {
+    if (!isNativeMobileApp) return;
+    return useAuthSessionStore.subscribe((store, previous) => {
+      if (store.state === 'expired' && previous.state !== 'expired') {
+        handleNativeResume();
+        // The probe ladder owns the outcome from here; the shared store goes
+        // back to 'ok' so a later expiry can signal again.
+        useAuthSessionStore.getState().markAuthenticated();
+      }
+    });
+  }, [isNativeMobileApp, handleNativeResume]);
+
   React.useEffect(() => {
     registerRuntimeAPIs(apis);
     return () => registerRuntimeAPIs(null);
@@ -1258,6 +1277,7 @@ export function MobileApp({ apis }: MobileAppProps) {
                 switchRuntimeEndpoint({ apiBaseUrl: '', clientToken: null, runtimeKey: 'mobile-disconnected' });
                 setConnectionEpoch((value) => value + 1);
               }} />
+              <AppLinkConfirmDialog />
               <Toaster position="top-center" offset="calc(var(--oc-safe-area-top, 0px) + 16px)" />
               {isInitialized ? <ConfigUpdateOverlay /> : null}
             </div>
