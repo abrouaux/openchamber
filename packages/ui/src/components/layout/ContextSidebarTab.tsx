@@ -7,7 +7,7 @@ import { Icon } from "@/components/icon/Icon";
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessionSubtreeCost } from '@/sync/session-cost';
+import { useSubagentCostRollup } from '@/components/chat/work-status/useSubagentCostRollup';
 import { computeCacheHitRate, computeSessionTokenRate } from '@/stores/utils/tokenUtils';
 import { useSessions, useSessionMessageRecords } from '@/sync/sync-context';
 import { copyTextToClipboard } from '@/lib/clipboard';
@@ -277,7 +277,7 @@ export const ContextPanelContent: React.FC = () => {
     currentSessionId ?? '',
     currentSessionDirectory ?? undefined,
   );
-  const subtreeCost = useSessionSubtreeCost(currentSessionId ?? null, currentSessionDirectory ?? undefined);
+  const costRollup = useSubagentCostRollup(currentSessionId ?? null);
   const providers = useConfigStore((state) => state.providers);
 
   React.useEffect(() => {
@@ -417,8 +417,8 @@ export const ContextPanelContent: React.FC = () => {
     );
   }
 
-  const sessionCost = subtreeCost?.sessionCost ?? viewModel.cost;
-  const totalCost = subtreeCost?.totalCost ?? viewModel.cost;
+  const sessionCost = costRollup.totalCost === null ? viewModel.cost : costRollup.ownCost;
+  const totalCost = costRollup.totalCost === null ? viewModel.cost : costRollup.totalCost;
 
   const segments: Array<{ key: string; label: string; value: number; color: string }> = [
     { key: 'user', label: t('contextSidebar.breakdown.user'), value: viewModel.breakdown.user, color: 'var(--status-success)' },

@@ -19,7 +19,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { Icon } from "@/components/icon/Icon";
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { computeSessionMessageCounts, computeSessionTokenRate, contextTokensFromBreakdown } from '@/stores/utils/tokenUtils';
-import { useSessionSubtreeCost } from '@/sync/session-cost';
+import { useSubagentCostRollup } from '@/components/chat/work-status/useSubagentCostRollup';
 import { getSyncParts } from '@/sync/sync-refs';
 import type { SessionContextUsage } from '@/stores/types/sessionTypes';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
@@ -64,7 +64,7 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
   const providers = useConfigStore((state) => state.providers);
   const sessions = useSessions();
   const currentSessionMessages = useSessionMessages(currentSessionId ?? '');
-  const subtreeCost = useSessionSubtreeCost(currentSessionId ?? null, currentSessionDirectory ?? undefined);
+  const { totalCost, ownCost } = useSubagentCostRollup(currentSessionId ?? null);
   const runtimeApis = useRuntimeAPIs();
   const ensureGitStatus = useGitStore((state) => state.ensureStatus);
   const worktreePath = useSessionUIStore((state) => currentSessionId ? state.worktreeMetadata.get(currentSessionId)?.path ?? '' : '');
@@ -217,11 +217,11 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
     contextUsage
       ? {
         ...contextUsage,
-        cost: subtreeCost && subtreeCost.totalCost > 0 ? subtreeCost.totalCost : undefined,
-        sessionCost: subtreeCost && subtreeCost.sessionCost > 0 ? subtreeCost.sessionCost : undefined,
+        cost: totalCost !== null && totalCost > 0 ? totalCost : undefined,
+        sessionCost: ownCost > 0 ? ownCost : undefined,
       }
       : null
-  ), [contextUsage, subtreeCost]);
+  ), [contextUsage, ownCost, totalCost]);
   const [stableContextUsage, setStableContextUsage] = React.useState<SessionContextUsage | null>(null);
   const dragRegionStyle = { WebkitAppRegion: 'drag' } as React.CSSProperties;
   const noDragRegionStyle = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;

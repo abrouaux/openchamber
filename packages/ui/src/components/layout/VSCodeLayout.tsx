@@ -6,6 +6,7 @@ import { ChatView } from '@/components/views/ChatView';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useViewportStore } from '@/sync/viewport-store';
 import { useSessions, useDirectorySync, useSessionMessages, useSessionMessagesResolved } from '@/sync/sync-context';
+import { useSubagentCostRollup } from '@/components/chat/work-status/useSubagentCostRollup';
 import { getSyncParts } from '@/sync/sync-refs';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
@@ -19,7 +20,6 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { cn } from '@/lib/utils';
 import { computeSessionMessageCounts, computeSessionTokenRate } from '@/stores/utils/tokenUtils';
-import { useSessionSubtreeCost } from '@/sync/session-cost';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -675,9 +675,11 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const currentSessionDirectory = useSessionUIStore((state) => state.currentSessionDirectory);
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
+  // Same rollup the work-status panel reports, so the header and the panel
+  // never disagree about what this session has cost.
+  const { totalCost: sessionTotalCost, ownCost: sessionOwnCost } = useSubagentCostRollup(currentSessionId ?? null);
   const currentSessionMessages = useSessionMessages(currentSessionId ?? '');
   const currentSessionMessagesResolved = useSessionMessagesResolved(currentSessionId ?? '');
-  const subtreeCost = useSessionSubtreeCost(currentSessionId ?? null, currentSessionDirectory ?? undefined);
   const quotaResults = useQuotaStore((state) => state.results);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isQuotaLoading = useQuotaStore((state) => state.isLoading);
@@ -771,11 +773,11 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
     contextUsage
       ? {
         ...contextUsage,
-        cost: subtreeCost && subtreeCost.totalCost > 0 ? subtreeCost.totalCost : undefined,
-        sessionCost: subtreeCost && subtreeCost.sessionCost > 0 ? subtreeCost.sessionCost : undefined,
+        cost: sessionTotalCost !== null && sessionTotalCost > 0 ? sessionTotalCost : undefined,
+        sessionCost: sessionOwnCost > 0 ? sessionOwnCost : undefined,
       }
       : null
-  ), [contextUsage, subtreeCost]);
+  ), [contextUsage, sessionOwnCost, sessionTotalCost]);
   const [stableContextUsage, setStableContextUsage] = React.useState<SessionContextUsage | null>(null);
   const isContextUsageResolvedForSession = !currentSessionId || currentSessionMessagesResolved;
 
