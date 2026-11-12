@@ -20,7 +20,6 @@ mock.module('@/lib/i18n', () => ({
   getCurrentIntlLocale: () => 'en-US',
   useI18n: () => ({ t: (key: string) => key }),
 }));
-mock.module('./ContextRailUsage', () => ({ ContextRing: () => null, ContextRailTooltipDetails: () => null }));
 mock.module('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -28,6 +27,7 @@ mock.module('@/components/ui/tooltip', () => ({
 }));
 
 const { HeaderContextUsage } = await import('./HeaderContextUsage');
+const { ContextRailTooltipDetails } = await import('./ContextRailUsage');
 
 const session = (id: string, cost: number, parentID?: string): Session => ({
   id, cost, parentID, projectID: 'project', directory: '/repo', title: id,
@@ -36,6 +36,9 @@ const session = (id: string, cost: number, parentID?: string): Session => ({
 });
 
 const text = () => renderToStaticMarkup(<HeaderContextUsage buttonClassName="header-button" />).replace(/<[^>]*>/g, '');
+const tooltipText = (showCostBreakdown = true) => renderToStaticMarkup(
+  <ContextRailTooltipDetails showCostBreakdown={showCostBreakdown} />,
+).replace(/<[^>]*>/g, '');
 
 describe('HeaderContextUsage cost', () => {
   beforeEach(() => {
@@ -45,22 +48,22 @@ describe('HeaderContextUsage cost', () => {
   });
 
   test('shows only the session cost when there are no subagents', () => {
-    expect(text()).toBe('14.3% - $4.1593');
+    expect(text()).toBe('14.3% · $4.1593');
   });
 
-  test('shows the total and the recursive session/subagent split using panel precision', () => {
+  test('shows only the recursive total in the header using panel precision', () => {
     sessions.push(session('child', 0.5, 'root'), session('grandchild', 0.1827, 'child'));
-    expect(text()).toBe('14.3% - $4.842 ($4.1593 + $0.6827)');
+    expect(text()).toBe('14.3% · $4.842');
   });
 
   test('does not include unrelated sessions', () => {
     sessions.push(session('other', 50), session('other-child', 10, 'other'));
-    expect(text()).toBe('14.3% - $4.1593');
+    expect(text()).toBe('14.3% · $4.1593');
   });
 
-  test('keeps zero-cost subagents in the breakdown', () => {
+  test('keeps zero-cost subagents out of the compact header', () => {
     sessions.push(session('child', 0, 'root'));
-    expect(text()).toBe('14.3% - $4.1593 ($4.1593 + $0)');
+    expect(text()).toBe('14.3% · $4.1593');
   });
 
   test('omits unavailable cost without hiding the context', () => {
@@ -70,12 +73,12 @@ describe('HeaderContextUsage cost', () => {
 
   test('shows a known zero cost', () => {
     sessions = [session('root', 0)];
-    expect(text()).toBe('14.3% - $0');
+    expect(text()).toBe('14.3% · $0');
   });
 
   test('keeps the cost visible after compaction', () => {
     reading.fill = { state: 'compacted' };
-    expect(text()).toBe('— - $4.1593');
+    expect(text()).toBe('— · $4.1593');
   });
 
   test('shows nothing without a context reading', () => {
@@ -86,5 +89,29 @@ describe('HeaderContextUsage cost', () => {
   test('shows nothing without a selected session', () => {
     reading.sessionId = null;
     expect(text()).toBe('');
+  });
+
+  test('shows session and recursive subagent costs on separate tooltip lines', () => {
+    sessions.push(session('child', 0.5, 'root'), session('grandchild', 0.1827, 'child'));
+    const markup = renderToStaticMarkup(<ContextRailTooltipDetails showCostBreakdown />);
+    expect(markup.includes('chat.workStatus.section.session: <bdi>$4.1593</bdi></span>')).toBe(true);
+    expect(markup.includes('chat.workStatus.section.subagents: <bdi>$0.6827</bdi></span>')).toBe(true);
+  });
+
+  test('shows known zero costs in both tooltip rows', () => {
+    sessions = [session('root', 0)];
+    expect(tooltipText().includes('chat.workStatus.section.session: $0')).toBe(true);
+    expect(tooltipText().includes('chat.workStatus.section.subagents: $0')).toBe(true);
+  });
+
+  test('omits the tooltip breakdown when cost is unavailable', () => {
+    sessions = [];
+    expect(tooltipText().includes('chat.workStatus.section.session')).toBe(false);
+    expect(tooltipText().includes('chat.workStatus.section.subagents')).toBe(false);
+  });
+
+  test('leaves the rail tooltip unchanged without the header breakdown option', () => {
+    expect(tooltipText(false).includes('chat.workStatus.section.session')).toBe(false);
+    expect(tooltipText(false).includes('chat.workStatus.section.subagents')).toBe(false);
   });
 });

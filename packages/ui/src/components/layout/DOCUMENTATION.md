@@ -6,11 +6,17 @@ The tab store, its scopes and seeding are owned by
 ## Header context cost
 
 The web/desktop context readout keeps the total cost beside the percentage,
-including while the Work Status panel is hidden. When subagents exist, the
-parenthesized split is session cost followed by recursive subagent cost.
+including while the Work Status panel is hidden. Its tooltip adds separate
+session and recursive subagent cost lines, including known zero costs.
 It uses the panel's `useSubagentCostRollup` and `formatCost`; unavailable cost
 is omitted. The live cost subscription stays in a leaf of the readout so cost
 updates do not re-render the header's context controls.
+
+### Why the cost split stays in the tooltip
+
+The header shows only the total beside the context percentage to keep the
+readout compact. An inline session/subagent split makes the header wider
+without helping a user who only needs to watch the total spend.
 
 ## Header session tabs
 

@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { useSubagentCostRollup } from '@/components/chat/work-status/useSubagentCostRollup';
+import { formatCost } from '@/components/chat/work-status/subagentCost';
 import { useI18n } from '@/lib/i18n';
 import { formatMoney } from '@/lib/money';
 import { cn } from '@/lib/utils';
@@ -54,10 +55,10 @@ export const ContextRing: React.FC<{ percent: number; arcColor?: string; classNa
  * the tooltip is open: the cost rollup reads every live session, which changes
  * on each streamed step.
  */
-export const ContextRailTooltipDetails: React.FC = () => {
+export const ContextRailTooltipDetails: React.FC<{ showCostBreakdown?: boolean }> = ({ showCostBreakdown = false }) => {
   const { t } = useI18n();
   const { sessionId, fill, limit } = useCurrentContextReading();
-  const { totalCost } = useSubagentCostRollup(sessionId);
+  const { totalCost, ownCost, subagentCost } = useSubagentCostRollup(sessionId);
   if (!sessionId || !fill) return null;
 
   const lines = [
@@ -73,6 +74,16 @@ export const ContextRailTooltipDetails: React.FC = () => {
       {lines.map((line) => (
         <span key={line} className="typography-micro text-muted-foreground">{line}</span>
       ))}
+      {showCostBreakdown && totalCost !== null && Number.isFinite(totalCost) ? (
+        <>
+          <span className="typography-micro text-muted-foreground">
+            {t('chat.workStatus.section.session')}: <bdi>{formatCost(ownCost)}</bdi>
+          </span>
+          <span className="typography-micro text-muted-foreground">
+            {t('chat.workStatus.section.subagents')}: <bdi>{formatCost(subagentCost)}</bdi>
+          </span>
+        </>
+      ) : null}
     </div>
   );
 };

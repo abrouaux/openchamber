@@ -21,12 +21,12 @@ const TONE_COLOR = {
 
 // Keep live cost updates in this leaf so they do not re-render the header's context controls.
 const HeaderContextCost: React.FC<{ sessionId: string }> = ({ sessionId }) => {
-  const { totalCost, ownCost, subagentCost, subagentCount } = useSubagentCostRollup(sessionId);
+  const { totalCost } = useSubagentCostRollup(sessionId);
   if (totalCost === null || !Number.isFinite(totalCost)) return null;
 
   return (
     <span className="text-muted-foreground">
-      {` - ${formatCost(totalCost)}${subagentCount > 0 ? ` (${formatCost(ownCost)} + ${formatCost(subagentCost)})` : ''}`}
+      {` · ${formatCost(totalCost)}`}
     </span>
   );
 };
@@ -77,7 +77,7 @@ const HeaderContextUsageComponent: React.FC<{ buttonClassName: string }> = ({ bu
       <TooltipContent side="bottom">
         <div className="flex flex-col gap-0.5">
           {contextShown ? null : <span>{t('chat.workStatus.action.openContext')}</span>}
-          <ContextRailTooltipDetails />
+          <ContextRailTooltipDetails showCostBreakdown />
         </div>
       </TooltipContent>
     </Tooltip>

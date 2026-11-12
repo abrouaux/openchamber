@@ -74,7 +74,7 @@ action live only there: in the card the app icon had no reading of its own,
 and the action row added only the action's name, which the header button's
 tooltip shows. The context row stays in the card as well for the cache-warming
 switch and the note after a compaction. Both the card and header show the total
-cost with its recursive subagent split. Hiding the header's
+cost; the header keeps its session/subagent split in the tooltip. Hiding the header's
 context while the card shows the same figure was rejected: the reading then
 jumps between two places as panels open and close, and the user has to look
 for it each time.
